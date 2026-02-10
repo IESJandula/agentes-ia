@@ -1,0 +1,29 @@
+# 1. Usamos la imagen oficial de Python 3.13 (versión slim para que sea ligera)
+FROM python:3.13-slim
+
+# 2. Configuraciones de Python
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# 3. Instalamos dependencias del sistema indispensables
+# Nota: Para Python 3.13, 'git' es útil si instalas librerías de IA directo de GitHub
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libffi-dev \
+    libssl-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# 4. Actualizamos pip (vital en versiones nuevas de Python)
+RUN pip install --upgrade pip
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
