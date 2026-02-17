@@ -1,35 +1,31 @@
-# --- Framework de Agentes y Grafos ---
-langchain>=0.3.0
-langchain-community>=0.3.0
-langchain-core>=0.3.0
-langgraph>=0.2.0
+# --- Núcleo de la API y Servidor ---
+fastapi
+uvicorn
+python-dotenv
+gradio
+pydantic
 
-# --- Modelos y Embeddings ---
-langchain-ollama>=0.2.0
-langchain-huggingface>=0.1.0
-langchain-google-genai>=2.0.0
-sentence-transformers>=3.0.0
+# --- Framework de IA y Orquestación ---
+langchain
+langchain-core
+langchain-community
+langgraph
+langchain-ollama
+langchain-google-genai
 
-# --- Base de Datos Vectorial ---
-langchain-chroma>=0.1.4
-chromadb>=0.5.0
+# --- Herramientas de Búsqueda y Navegación ---
+playwright
+langchain-tavily
+beautifulsoup4
+requests
+rapidfuzz
 
-# --- Herramientas de Navegación (LangChain + Playwright) ---
-langchain-playwright>=0.0.3
-playwright>=1.49.0
-beautifulsoup4>=4.12.0 
-html2text>=2024.2.26
-langchain-tavily>=0.1.0
-tavily-python>=0.5.0
+# --- Base de Datos Vectorial (RAG) ---
+langchain-chroma
+langchain-huggingface
+sentence-transformers
+pypdf
+langchain-text-splitters
 
-# --- Procesamiento y Utilidades ---
-pypdf>=5.1.0
-rapidfuzz>=3.10.0
-python-dotenv>=1.0.1
-requests>=2.32.0
-
-# --- API y Servidor ---
-fastapi>=0.115.0
-uvicorn[standard]>=0.32.0
-pydantic>=2.9.0
-pydantic-settings>=2.5.0
+# --- Utilidades ---
+typing-extensions
