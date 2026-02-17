@@ -53,4 +53,11 @@ async def root():
     }
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run(
+        "main:app", 
+        host="127.0.0.1", 
+        port=8000, 
+        reload=False,
+        timeout_keep_alive=300,  # 5 minutos para conexiones mantenidas vivas
+        timeout_notify=300       # 5 minutos para notificaciones
+    )
