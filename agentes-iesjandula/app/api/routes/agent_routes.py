@@ -6,8 +6,15 @@ from pydantic import BaseModel
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from app.agents.agente_profesores import inicializar_agente_profesores
+import shutil
+import os
+import tempfile
+from fastapi import  UploadFile, File
+from fastapi.responses import FileResponse
+from app.agents import AgenteVozJandula 
 
 # Router para las rutas del agente
+_agente_voz = None
 router = APIRouter(prefix="/agente", tags=["Agente"])
 
 # Modelos de solicitud/respuesta
@@ -131,3 +138,60 @@ async def consultar_agente(consulta: ConsultaRequest):
 async def health_check():
     """Verifica que el servicio está activo."""
     return {"status": "ok", "servicio": "Agente IES Jándula"}
+
+# ... (mantén tu función inicializar_agente_app existente) ...
+
+async def inicializar_agente_voz_app():
+    global _agente_voz
+    if _agente_voz is None:
+        try:
+            # Forzamos la creación del objeto AgenteVozJandula en el executor
+            # Así, la carga de Playwright ocurre en un hilo separado de asyncio
+            _agente_voz = await asyncio.get_event_loop().run_in_executor(
+                _executor,
+                lambda: AgenteVozJandula()
+            )
+            print("✅ Agente de VOZ inicializado correctamente.")
+        except Exception as e:
+            print(f"❌ Error al inicializar agente de voz: {e}")
+
+@router.post("/consulta-voz")
+async def consultar_agente_voz(audio_file: UploadFile = File(...)):
+    """
+    Recibe un archivo de audio, lo procesa con MiniCPM y responde con un audio de Orpheus.
+    """
+    if _agente_voz is None:
+        await inicializar_agente_voz_app()
+
+    # 1. Crear un archivo temporal para guardar el audio entrante
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_input:
+        shutil.copyfileobj(audio_file.file, tmp_input)
+        ruta_entrada = tmp_input.name
+
+    try:
+        # 2. Procesar mediante el Agente de Voz (STT -> Grafo -> TTS)
+        # Ejecutamos en el executor para no bloquear
+        ruta_salida_nombre = await asyncio.get_event_loop().run_in_executor(
+            _executor,
+            _agente_voz.interactuar,
+            ruta_entrada
+        )
+
+        # 3. Retornar el archivo de audio generado
+        # Nota: Asegúrate de que 'respuesta_jandula.wav' exista en el path raíz o ajusta la ruta
+        if os.path.exists(ruta_salida_nombre):
+            return FileResponse(
+                path=ruta_salida_nombre, 
+                media_type="audio/wav", 
+                filename="respuesta_jandula.wav"
+            )
+        else:
+            raise HTTPException(status_code=500, detail="No se pudo generar el audio de respuesta")
+
+    except Exception as e:
+        print(f"[ERROR VOZ]: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error en proceso de voz: {str(e)}")
+    finally:
+        # Limpieza: eliminar el archivo de entrada temporal
+        if os.path.exists(ruta_entrada):
+            os.remove(ruta_entrada)
