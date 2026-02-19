@@ -29,3 +29,7 @@ langchain-text-splitters
 
 # --- Utilidades ---
 typing-extensions
+
+# --- Voz ---
+whisper
+gtts
