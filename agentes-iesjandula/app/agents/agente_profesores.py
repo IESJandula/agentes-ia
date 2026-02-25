@@ -14,12 +14,12 @@ from app.tools import obtener_todas_las_tools
 class Estado(TypedDict):
     messages: Annotated[list, add_messages]
 
-def inicializar_agente_profesores(es_voz=False):
+async def inicializar_agente_profesores(es_voz=False):
     """
     Crea el grafo específico para el Agente de Profesores.
     """
     # 1. Cargamos todas las herramientas desde la carpeta tools
-    herramientas = obtener_todas_las_tools()
+    herramientas = await obtener_todas_las_tools()
     
     # 2. Configuración del LLM
     SYSTEM_PROMPT = """Eres el Asistente Oficial del IES Jándula (Andújar). 
