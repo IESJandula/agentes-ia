@@ -3,7 +3,7 @@ from .tavily_busqueda_tool import tool_busqueda_general
 from .respuesta_final_tool import dar_respuesta_final
 from .playwright_busqueda_tool import get_playwright_tools
 
-def obtener_todas_las_tools():
+async def obtener_todas_las_tools():
     """
     Une las herramientas manuales con el conjunto de herramientas 
     de navegación de Playwright.
@@ -16,7 +16,8 @@ def obtener_todas_las_tools():
     ]
     
     try:
-        herramientas_navegador = get_playwright_tools()
+        herramientas_navegador = await get_playwright_tools()
+        print("HERRAMIENTAS DE NAVEGADOR:",herramientas_navegador)
         herramientas.extend(herramientas_navegador)
     except Exception as e:
         print(f"⚠️ No se pudieron cargar las tools de Playwright: {e}")
