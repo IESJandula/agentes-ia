@@ -7,7 +7,7 @@ from .agente_profesores import inicializar_agente_profesores
 class AgenteVozJandula:
     def __init__(self):
         # 1. El Cerebro
-        self.grafo = inicializar_agente_profesores()
+        self.grafo = inicializar_agente_profesores(es_voz=True)
         
         # Determine dispositivo
         device_idx = 0 if torch.cuda.is_available() else -1

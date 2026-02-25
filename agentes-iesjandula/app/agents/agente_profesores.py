@@ -14,7 +14,7 @@ from app.tools import obtener_todas_las_tools
 class Estado(TypedDict):
     messages: Annotated[list, add_messages]
 
-def inicializar_agente_profesores():
+def inicializar_agente_profesores(es_voz=False):
     """
     Crea el grafo específico para el Agente de Profesores.
     """
@@ -36,7 +36,12 @@ def inicializar_agente_profesores():
         - Si la información no es específica del IES Jándula, responde: "Esa información no consta en los registros oficiales del IES Jándula".
         - Responde siempre de forma concisa y en español.
         """
-    
+    if es_voz:
+        SYSTEM_PROMPT += """
+        MODO VOZ ACTIVO: Responde SIEMPRE en un solo párrafo corto (máximo 3 frases). 
+        PROHIBIDO usar tablas, listas, asteriscos, negritas o cualquier signo de Markdown. 
+        Escribe los números con palabras si es necesario para que suenen naturales."""
+
     chat = ChatOllama(model="gpt-oss:20b-cloud", temperature=0)
     llm_con_herramientas = chat.bind_tools(herramientas)
     
@@ -46,7 +51,8 @@ def inicializar_agente_profesores():
     # 3. Definición de Nodos
     def chatbot(estado: Estado):
         # Es vital pasar el SystemPrompt en la lista de mensajes o en la configuración
-        return {"messages": [llm_con_herramientas.invoke(estado["messages"])]}
+        system_message = {"role": "system", "content": SYSTEM_PROMPT}
+        return {"messages": [llm_con_herramientas.invoke([system_message] + estado["messages"])]}
 
     def ejecutar_tools_sync(estado: Estado):
         """
