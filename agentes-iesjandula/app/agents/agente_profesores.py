@@ -52,7 +52,7 @@ async def inicializar_agente_profesores(es_voz=False):
     def chatbot(estado: Estado):
         # Es vital pasar el SystemPrompt en la lista de mensajes o en la configuración
         system_message = {"role": "system", "content": SYSTEM_PROMPT}
-        return {"messages": [llm_con_herramientas.invoke([system_message] + estado["messages"])]}
+        return {"messages": [llm_con_herramientas.invoke(estado["messages"])]}
 
     def ejecutar_tools_sync(estado: Estado):
         """
