@@ -14,9 +14,10 @@ import traceback
 
 from app.agents.agente_profesores import inicializar_agente_profesores
 from app.agents import AgenteVozJandula
+from app.agents import AgenteHibridoJandula
 
 
-router = APIRouter(prefix="/agente", tags=["Agente"])
+router = APIRouter(tags=["Agente"])
 
 
 # ==============================
@@ -37,6 +38,7 @@ class ConsultaResponse(BaseModel):
 
 _agente_grafo = None
 _agente_voz = None
+_agente_hibrido = None
 
 
 # ==============================
@@ -62,11 +64,22 @@ async def inicializar_agente_voz_app():
         print("✅ Agente VOZ inicializado.")
 
 
+async def inicializar_agente_hibrido_app():
+    global _agente_hibrido
+    if _agente_hibrido is None:
+        print("🚀 Inicializando agente HÍBRIDO (Voz -> Texto)...")
+        from app.agents.agente_hibrido import AgenteHibridoJandula
+        _agente_hibrido = AgenteHibridoJandula()
+        await _agente_hibrido.inicializar()
+        print("✅ Agente HÍBRIDO inicializado.")
+
+
+
 # ==============================
 # RUTA TEXTO
 # ==============================
 
-@router.post("/consulta", response_model=ConsultaResponse)
+@router.post("/chat", response_model=ConsultaResponse)
 async def consultar_agente(consulta: ConsultaRequest):
 
     if not consulta.pregunta.strip():
@@ -117,7 +130,7 @@ async def consultar_agente(consulta: ConsultaRequest):
 # RUTA VOZ
 # ==============================
 
-@router.post("/consulta-voz")
+@router.post("/speak")
 async def consultar_agente_voz(audio_file: UploadFile = File(...)):
 
     if _agente_voz is None:
@@ -164,3 +177,46 @@ async def consultar_agente_voz(audio_file: UploadFile = File(...)):
 @router.get("/health")
 async def health_check():
     return {"status": "ok", "servicio": "Agente IES Jándula"}
+
+
+
+# ==============================
+# RUTA HÍBRIDA: VOICE TO TEXT
+# ==============================
+
+@router.post("/transcribe")
+async def consultar_agente_hibrido(audio_file: UploadFile = File(...)):
+    """
+    Recibe audio, transcribe y devuelve la respuesta del agente en texto.
+    Ruta final: /api/agente/transcribe
+    """
+    if _agente_hibrido is None:
+        await inicializar_agente_hibrido_app()
+
+    # 1. Guardar audio temporalmente
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+        shutil.copyfileobj(audio_file.file, tmp)
+        ruta_entrada = tmp.name
+
+    try:
+        print(f"[API] Híbrido - Procesando audio: {ruta_entrada}")
+
+        # 2. Llamada al método consultar del AgenteHibrido
+        # Devuelve un dict con {"transcripcion_usuario": "...", "respuesta_agente": "..."}
+        resultado = await asyncio.wait_for(
+            _agente_hibrido.consultar(ruta_entrada),
+            timeout=300
+        )
+
+        return resultado
+
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Timeout en el proceso híbrido")
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error en agente híbrido: {str(e)}")
+    
+    finally:
+        # 3. Limpieza del archivo temporal
+        if os.path.exists(ruta_entrada):
+            os.remove(ruta_entrada)
