@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from app.api.routes import router, inicializar_agente_app
+from app.api.routes.rag_routes import router as rag_router
+
 
 
 load_dotenv()
@@ -44,7 +46,9 @@ app.add_middleware(
 )
 
 # Incluir rutas del agente
-app.include_router(router)
+app.include_router(router, prefix="/api")
+app.include_router(rag_router, prefix="/api")
+
 
 @app.get("/")
 async def root():
