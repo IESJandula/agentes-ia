@@ -54,50 +54,32 @@ async def inicializar_agente_profesores(es_voz=False):
         system_message = {"role": "system", "content": SYSTEM_PROMPT}
         return {"messages": [llm_con_herramientas.invoke(estado["messages"])]}
 
-    def ejecutar_tools_sync(estado: Estado):
+    async def ejecutar_tools_async(estado: Estado):
         """
-        Ejecuta tools de forma sincrónica en el mismo thread.
-        Evita ThreadPoolExecutor de ToolNode que causa conflictos con Playwright.
+        Versión asíncrona para manejar Playwright y las herramientas de RAG.
         """
-        messages = estado["messages"]
-        if not messages:
-            return {"messages": []}
-        
-        last_message = messages[-1]
-        
-        # Verificar si el último mensaje tiene tool_calls
-        if not hasattr(last_message, 'tool_calls') or not last_message.tool_calls:
-            return {"messages": []}
-        
-        # Ejecutar cada tool secuencialmente
+        ultimo_mensaje = estado["messages"][-1]
         tool_results = []
-        for tool_call in last_message.tool_calls:
-            tool_name = tool_call.get("name") if isinstance(tool_call, dict) else tool_call.name
-            tool_input = tool_call.get("args") if isinstance(tool_call, dict) else tool_call.args
+        
+        for tool_call in ultimo_mensaje.tool_calls:
+            tool_name = tool_call["name"]
+            tool_input = tool_call["args"]
             
-            if tool_name not in tool_map:
-                result = f"Error: tool '{tool_name}' no encontrada"
-            else:
-                try:
-                    tool = tool_map[tool_name]
-                    result = tool.invoke(tool_input)
-                except Exception as e:
-                    result = f"Error ejecutando {tool_name}: {str(e)}"
+            # Invocación asíncrona de la herramienta
+            observacion = await tool_map[tool_name].ainvoke(tool_input)
             
-            # Crear mensaje de respuesta de la tool
-            tool_message = ToolMessage(
-                content=str(result),
-                tool_call_id=tool_call.get("id") if isinstance(tool_call, dict) else tool_call.id,
+            tool_results.append(ToolMessage(
+                content=str(observacion),
+                tool_call_id=tool_call["id"],
                 name=tool_name
-            )
-            tool_results.append(tool_message)
+            ))
         
         return {"messages": tool_results}
 
     # 4. Construcción del Grafo
     constructor = StateGraph(Estado)
     constructor.add_node("chatbot", chatbot)
-    constructor.add_node("tools", ejecutar_tools_sync)
+    constructor.add_node("tools", ejecutar_tools_async)
     
     constructor.add_conditional_edges("chatbot", tools_condition)
     constructor.add_edge("tools", "chatbot")
