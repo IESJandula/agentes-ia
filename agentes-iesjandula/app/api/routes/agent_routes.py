@@ -95,14 +95,17 @@ async def consultar_agente(consulta: ConsultaRequest):
             "configurable": {"thread_id": "default"}
         }
 
-        # 🔥 Uso completamente async
+        # En la RUTA TEXTO o VOZ donde llames al grafo:
         respuesta = await asyncio.wait_for(
             _agente_grafo.ainvoke(
                 {"messages": [("user", consulta.pregunta)]},
-                config
+                {
+                    "configurable": {"thread_id": "default"},
+                    "recursion_limit": 25 
+                }
             ),
             timeout=300
-        )
+)
 
         mensajes = respuesta.get("messages", [])
 

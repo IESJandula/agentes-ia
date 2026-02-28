@@ -10,6 +10,8 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from app.api.routes import router, inicializar_agente_app
 from app.api.routes.rag_routes import router as rag_router
+from app.api.routes import router, inicializar_agente_app
+from data.data import inicializar_bases_datos
 
 
 
@@ -22,10 +24,18 @@ async def lifespan(app: FastAPI):
     print("\n" + "="*60)
     print("INICIANDO APLICACIÓN DEL AGENTE IES JÁNDULA")
     print("="*60)
+    
+    # 1. CARGAR LA BASE DE DATOS (RAG) PRIMERO
+    print("🚀 CARGANDO BASE DE DATOS VECTORIAL...")
+    inicializar_bases_datos() 
+    
+    # 2. INICIALIZAR EL AGENTE
+    print("🚀 Inicializando agente texto...")
     await inicializar_agente_app()
+    
     print("="*60 + "\n")
     yield
-    # Shutdown: Limpiar recursos si es necesario
+    # Shutdown
     print("\nAplicación finalizada.")
 
 # Crear aplicación FastAPI

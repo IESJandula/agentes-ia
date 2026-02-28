@@ -10,6 +10,7 @@ load_dotenv()
 # Configuración de rutas y embeddings
 current_dir = os.path.dirname(os.path.abspath(__file__))
 persist_db_path = os.path.join(current_dir, "chroma_db")
+
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 # Inicialización de colecciones (Chroma las crea si no existen)
@@ -40,7 +41,7 @@ def obtener_loader(file_path):
 def procesar_y_añadir(file_path, target_collection):
     """Lógica común para fragmentar y subir documentos"""
     loader = obtener_loader(file_path)
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=700, chunk_overlap=100)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     
     docs = loader.load_and_split(text_splitter)
     
@@ -53,16 +54,30 @@ def procesar_y_añadir(file_path, target_collection):
 
 # --- MÉTODOS PARA ENDPOINT ---
 
-def inicializar_bases_datos(pdf_profes, pdf_alumnos):
-    """Carga inicial de documentos base si las colecciones están vacías."""
+# Dentro de data.py, añade estas líneas después de persist_db_path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Ruta automática al PDF que vemos en tu imagen:
+RUTA_PDF_DEFAULT = os.path.join(current_dir, "guia-profesorado.pdf")
+
+def inicializar_bases_datos(pdf_profes=None, pdf_alumnos=None):
+    """Carga inicial mejorada."""
+    # Si no nos pasan ruta, usamos la que detectamos en la carpeta data/
+    pdf_profes = pdf_profes or RUTA_PDF_DEFAULT
+    
     for col, path, name in [(profesores_col, pdf_profes, "Profesores"), 
                             (alumnos_col, pdf_alumnos, "Alumnos")]:
-        if col._collection.count() == 0:
-            if os.path.exists(path):
+        
+        # Log de diagnóstico
+        print(f"🔍 Verificando {name} en: {path}")
+        
+        if path and os.path.exists(path):
+            if col._collection.count() == 0:
                 num = procesar_y_añadir(path, name.lower())
                 print(f"✅ {name} inicializado con {num} fragmentos.")
             else:
-                print(f"⚠️ Archivo base para {name} no encontrado.")
+                print(f"ℹ️ {name} ya tiene {col._collection.count()} fragmentos. Saltando carga.")
+        else:
+            print(f"❌ ERROR: No se encontró el archivo en {path}")
 
 def subir_nuevo_documento(file_path, perfil_seleccionado):
     """
