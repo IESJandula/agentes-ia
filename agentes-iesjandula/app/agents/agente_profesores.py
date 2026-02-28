@@ -7,6 +7,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import tools_condition
 from langchain_ollama import ChatOllama
 from langchain_core.messages import ToolMessage
+from langchain_core.messages import SystemMessage
 
 # IMPORTACIONES DE TU NUEVA ESTRUCTURA
 from app.tools import obtener_todas_las_tools
@@ -36,6 +37,7 @@ async def inicializar_agente_profesores(es_voz=False):
         - Si la información no es específica del IES Jándula, responde: "Esa información no consta en los registros oficiales del IES Jándula".
         - Responde siempre de forma concisa y en español.
         """
+
     if es_voz:
         SYSTEM_PROMPT += """
         MODO VOZ ACTIVO: Responde SIEMPRE en un solo párrafo corto (máximo 3 frases). 
@@ -50,14 +52,12 @@ async def inicializar_agente_profesores(es_voz=False):
 
     # 3. Definición de Nodos
     def chatbot(estado: Estado):
-        # Es vital pasar el SystemPrompt en la lista de mensajes o en la configuración
-        system_message = {"role": "system", "content": SYSTEM_PROMPT}
-        return {"messages": [llm_con_herramientas.invoke(estado["messages"])]}
+        system_message = SystemMessage(content=SYSTEM_PROMPT)
+        mensajes_para_el_llm = [system_message] + estado["messages"]
+        respuesta = llm_con_herramientas.invoke(mensajes_para_el_llm)
+        return {"messages": [respuesta]}
 
     async def ejecutar_tools_async(estado: Estado):
-        """
-        Versión asíncrona para manejar Playwright y las herramientas de RAG.
-        """
         ultimo_mensaje = estado["messages"][-1]
         tool_results = []
         
@@ -65,8 +65,17 @@ async def inicializar_agente_profesores(es_voz=False):
             tool_name = tool_call["name"]
             tool_input = tool_call["args"]
             
-            # Invocación asíncrona de la herramienta
-            observacion = await tool_map[tool_name].ainvoke(tool_input)
+            try:
+                # 🛡️ Invocación protegida
+                observacion = await tool_map[tool_name].ainvoke(tool_input)
+            except Exception as e:
+                # Si Playwright da error de selector o red, el LLM recibirá este texto
+                print(f"⚠️ Error en herramienta {tool_name}: {e}")
+                observacion = (
+                    f"Error al ejecutar {tool_name}. No se pudo encontrar el elemento o la página. "
+                    "Por favor, intenta buscar la información usando la 'guia_profesorado' "
+                    "o realiza una búsqueda general en la web con otra herramienta."
+                )
             
             tool_results.append(ToolMessage(
                 content=str(observacion),
