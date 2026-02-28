@@ -1,9 +1,10 @@
 from langchain_core.tools import tool
-from data.data import profesores_col
+from data.data import alumnos_col
 
 @tool
-def guia_profesorado(search: str) -> str:
-    """Consulta la guía oficial del profesorado del IES Jándula 2025/26.
+def guia_alumnado(search: str) -> str:
+    """Consulta los documentos de ayuda o datos de interés
+     para los alumnos del IES Jándula 2025/26.
 
     Args:
         search (str): La consulta de búsqueda.
@@ -12,5 +13,5 @@ def guia_profesorado(search: str) -> str:
         str: La información relevante encontrada en la guía.
     """
     print("Buscando en la guia de profesorado:",search)
-    docs = profesores_col.similarity_search(search, k=10)
+    docs = alumnos_col.similarity_search(search, k=10)
     return " ".join(("\n\n".join([doc.page_content for doc in docs])).split())
