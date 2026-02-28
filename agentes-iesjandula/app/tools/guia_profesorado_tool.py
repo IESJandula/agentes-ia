@@ -1,5 +1,5 @@
 from langchain_core.tools import tool
-from data import vector_store
+from data.data import profesores_col
 
 @tool
 def guia_profesorado(search: str) -> str:
@@ -12,5 +12,5 @@ def guia_profesorado(search: str) -> str:
         str: La información relevante encontrada en la guía.
     """
     print("Buscando en la guia de profesorado:",search)
-    docs = vector_store.similarity_search(search, k=10)
+    docs = profesores_col.similarity_search(search, k=10)
     return " ".join(("\n\n".join([doc.page_content for doc in docs])).split())
