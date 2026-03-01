@@ -8,31 +8,32 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from app.api.routes import router, inicializar_agente_app
-from app.api.routes.rag_routes import router as rag_router
-from app.api.routes import router, inicializar_agente_app
+
+from app.api.routes.AgentRoutes import router as agent_router
+from app.api.routes.RagRoutes import router as rag_router
+from app.api.services.AgenteService import agents_service  
 from data.data import inicializar_bases_datos
-
-
 
 load_dotenv()
 
 # Eventos de ciclo de vida de la aplicación
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Inicializar el agente cuando la app arranca
+    # Startup: Inicializar componentes al arrancar
     print("\n" + "="*60)
     print("INICIANDO APLICACIÓN DEL AGENTE IES JÁNDULA")
     print("="*60)
     
-    # 1. CARGAR LA BASE DE DATOS (RAG) PRIMERO
+    # 1. CARGAR LA BASE DE DATOS (RAG)
     print("🚀 CARGANDO BASE DE DATOS VECTORIAL...")
     inicializar_bases_datos() 
     
-    # 2. INICIALIZAR EL AGENTE
-    print("🚀 Inicializando agente texto...")
-    await inicializar_agente_app()
+    # 2. INICIALIZAR EL AGENTE DESDE EL SERVICIO
+    # En lugar de llamar a una función suelta, usamos el método del Service
+    print("🚀 Inicializando agente texto (via Service)...")
+    await agents_service.get_agente_texto()
     
+    print("✅ Todo listo para recibir peticiones.")
     print("="*60 + "\n")
     yield
     # Shutdown
@@ -55,10 +56,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Incluir rutas del agente
-app.include_router(router, prefix="/api")
+# Incluir rutas con prefijos claros para evitar colisiones
+app.include_router(agent_router, prefix="/api")
 app.include_router(rag_router, prefix="/api")
-
 
 @app.get("/")
 async def root():
@@ -66,10 +66,7 @@ async def root():
     return {
         "mensaje": "Bienvenido a la API del Agente IES Jándula",
         "docs": "/docs",
-        "endpoints": {
-            "consulta": "/agente/consulta",
-            "health": "/agente/health"
-        }
+        "servicios": ["Agente Texto/Voz", "RAG"]
     }
 
 if __name__ == "__main__":
@@ -78,6 +75,6 @@ if __name__ == "__main__":
         host="127.0.0.1", 
         port=8000, 
         reload=False,
-        timeout_keep_alive=300,  # 5 minutos para conexiones mantenidas vivas
-        timeout_notify=300       # 5 minutos para notificaciones
+        timeout_keep_alive=300,
+        timeout_notify=300
     )
