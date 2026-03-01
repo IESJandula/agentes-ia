@@ -16,28 +16,20 @@ from data.data import inicializar_bases_datos
 
 load_dotenv()
 
-# Eventos de ciclo de vida de la aplicación
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Inicializar componentes al arrancar
     print("\n" + "="*60)
-    print("INICIANDO APLICACIÓN DEL AGENTE IES JÁNDULA")
+    print("INICIANDO APLICACIÓN DEL AGENTE MULTIMODAL IES JÁNDULA")
     print("="*60)
-    
-    # 1. CARGAR LA BASE DE DATOS (RAG)
-    print("🚀 CARGANDO BASE DE DATOS VECTORIAL...")
-    inicializar_bases_datos() 
-    
-    # 2. INICIALIZAR EL AGENTE DESDE EL SERVICIO
-    # En lugar de llamar a una función suelta, usamos el método del Service
-    print("🚀 Inicializando agente texto (via Service)...")
-    await agents_service.get_agente_texto()
-    
-    print("✅ Todo listo para recibir peticiones.")
-    print("="*60 + "\n")
+    try:
+        print("🚀 Inicializando Cerebro del Agente (Modo Texto/Profesores)...")
+        await agents_service.procesar_chat("Hola", perfil="profesores") 
+        print("✅ Sistema listo para recibir consultas.")
+    except Exception as e:
+        print(f"⚠️ Nota: El pre-calentamiento falló, pero la app arrancará: {e}")
+
     yield
-    # Shutdown
-    print("\nAplicación finalizada.")
+    print("\nFinalizando aplicación...")
 
 # Crear aplicación FastAPI
 app = FastAPI(
