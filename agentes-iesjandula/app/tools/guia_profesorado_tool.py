@@ -18,7 +18,7 @@ def guia_profesorado(search: str) -> str:
     count = profesores_col._collection.count()
     print(f"DEBUG: La base de datos tiene {count} fragmentos en total.")
 
-    docs = profesores_col.similarity_search(search, k=5)
+    docs = profesores_col.similarity_search(search, k=10)
     print(f"DEBUG: Se han recuperado {len(docs)} fragmentos.")
     
     if len(docs) > 0:
@@ -26,7 +26,7 @@ def guia_profesorado(search: str) -> str:
     
     # 1. Realizamos la búsqueda con k=8 (10 a veces es demasiado contexto y marea al modelo)
     # 2. Nos aseguramos de que los fragmentos mantengan su estructura
-    docs = profesores_col.similarity_search(search, k=8)
+    docs = profesores_col.similarity_search(search, k=10)
     
     if not docs:
         return "No se ha encontrado información relevante en la guía del profesorado."
