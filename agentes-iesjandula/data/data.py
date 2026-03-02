@@ -41,7 +41,7 @@ def obtener_loader(file_path):
 def procesar_y_añadir(file_path, target_collection):
     """Lógica común para fragmentar y subir documentos"""
     loader = obtener_loader(file_path)
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
     
     docs = loader.load_and_split(text_splitter)
     
