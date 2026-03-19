@@ -26,9 +26,18 @@ async def obtener_tools_publicas() -> list:
 async def obtener_tools_profesorado() -> list:
     """
     Tools EXCLUSIVAS para profesores: solo la guía interna.
-    No incluye Playwright ni Tavily — la guía cubre todo lo interno.
     """
-    return [guia_profesorado]
+    herramientas = [
+        guia_profesorado,
+        tool_busqueda_general,
+    ]
+    try:
+        herramientas_playwright = await get_playwright_tools()
+        herramientas.extend(herramientas_playwright)
+    except Exception as e:
+        print(f"⚠️ Error cargando Playwright: {e}")
+
+    return herramientas
 
 
 async def obtener_todas_las_tools(perfil: str = "alumnos") -> list:
