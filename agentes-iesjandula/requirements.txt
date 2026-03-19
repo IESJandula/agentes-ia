@@ -33,3 +33,6 @@ typing-extensions
 # --- Voz ---
 whisper
 gtts
+
+grandalf
+kokoro-onnx soundfile
