@@ -18,14 +18,14 @@ async def get_playwright_tools():
 
         # Sobreescribimos la descripción de las tools de Playwright
         # para que el LLM sepa exactamente para qué sirven
-        for t in tools:
+        """ for t in tools:
             t.description = (
                 f"{t.description} "
                 "USAR SOLO para navegar la web pública del IES Jándula: https://blogsaverroes.juntadeandalucia.es/iesjandula/ "
                 "(blog Averroes, noticias, eventos, horarios generales) "
                 "o páginas web externas. "
                 "NO usar para documentos internos ni guía del profesorado."
-            )
+            ) """
 
         return tools
     except Exception as e:

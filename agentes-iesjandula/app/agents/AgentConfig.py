@@ -50,7 +50,7 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
     PROMPT_PROF = PROMPTS[perfil] + "\n\n" + BEHAVIOR_TEACHER + (REGLAS_VOZ if es_voz else "")
 
     # ── 3. LLMs ─────────────────────────────────────────────────────────────
-    _base_llm    = ChatOllama(model="gpt-oss:20b-cloud", temperature=0)
+    _base_llm    = ChatOllama(model="granite4", temperature=0)
     llm_clasif   = _base_llm                                      # sin tools
     llm_pub      = _base_llm.bind_tools(tools_pub)
     llm_prof     = _base_llm.bind_tools(tools_prof) if tools_prof else _base_llm
@@ -64,9 +64,9 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
         """Decide si la consulta es pública o interna de profesorado."""
 
         # perfil viene del closure de configurar_grafo_ies, no del estado
-        #if perfil != "profesores" or not tools_prof:
-            #return {"tipo_consulta": "publica"}
-        return {"tipo_consulta": "profesorado"}
+        if perfil != "profesores" or not tools_prof:
+            return {"tipo_consulta": "publica"}
+        #return {"tipo_consulta": "profesorado"}
         ultimo = estado["messages"][-1]
         texto  = ultimo.content if hasattr(ultimo, "content") else str(ultimo)
 
