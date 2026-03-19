@@ -36,7 +36,7 @@ admission lists, vocational training courses (FP), school calendar, and public a
 
 Tool usage rules:
 - Navigate directly to the most relevant page for the query. Do not browse aimlessly.
-- If the first page does not contain the answer, try ONE more specific URL, then stop.
+- If the first page does not contain the answer, try until 5 more specific URL, then stop.
 - Do not call more than 2 tool chains for the same query. If still unresolved, tell the user
   what you found and suggest they check the website directly."""
 
