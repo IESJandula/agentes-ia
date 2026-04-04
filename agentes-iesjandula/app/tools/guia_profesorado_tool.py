@@ -28,16 +28,22 @@ def guia_profesorado(search: str) -> str:
     """
     print(f"📋 Buscando en guía de profesorado: {search}")
 
-    count = profesores_col._collection.count()
+    count = profesores_col.count()
     print(f"DEBUG: La colección tiene {count} fragmentos.")
 
-    docs = profesores_col.similarity_search(search, k=8)
+    resultados = profesores_col.query(
+        query_texts=[search],
+        n_results=8,
+        include=["documents", "metadatas", "distances"]
+    )
+
+    docs = resultados["documents"][0]
 
     if not docs:
         return "No se encontró información en la guía del profesorado para esa consulta."
 
     contexto = ""
-    for i, doc in enumerate(docs):
-        contexto += f"\n--- Fragmento {i+1} ---\n{doc.page_content}\n"
+    for i, texto in enumerate(docs):
+        contexto += f"\n--- Fragmento {i+1} ---\n{texto}\n"
 
     return contexto

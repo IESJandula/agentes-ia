@@ -50,7 +50,7 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
     PROMPT_PROF = PROMPTS[perfil] + "\n\n" + BEHAVIOR_TEACHER + (REGLAS_VOZ if es_voz else "")
 
     # ── 3. LLMs ─────────────────────────────────────────────────────────────
-    _base_llm    = ChatOllama(model="granite4", temperature=0)
+    _base_llm    = ChatOllama(model="gpt-oss:20b-cloud", temperature=0.1)
     llm_clasif   = _base_llm                                      # sin tools
     llm_pub      = _base_llm.bind_tools(tools_pub)
     llm_prof     = _base_llm.bind_tools(tools_prof) if tools_prof else _base_llm
@@ -102,7 +102,16 @@ Ante la duda responde: publica""")
 
     # ── Chatbot profesorado ───────────────────────────────────────────────────
     def chatbot_profesorado(estado: Estado) -> dict:
-        system = SystemMessage(content=PROMPT_PROF)
+        # Filtramos para ver si el último mensaje es de una herramienta (ToolMessage)
+        ultimo_mensaje = estado["messages"][-1]
+        
+        contexto_adicional = ""
+        if isinstance(ultimo_mensaje, ToolMessage):
+            contexto_adicional = f"\n\nCONTEXTO RECUPERADO DE LA GUÍA:\n{ultimo_mensaje.content}\n\nUsa esta información para responder brevemente."
+
+        system = SystemMessage(content=PROMPT_PROF + contexto_adicional)
+        
+        # Invocamos solo con el historial relevante
         respuesta = llm_prof.invoke([system] + estado["messages"])
         return {"messages": [respuesta]}
 

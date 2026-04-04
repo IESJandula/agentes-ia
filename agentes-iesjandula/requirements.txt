@@ -35,4 +35,8 @@ whisper
 gtts
 
 grandalf
+soundfile
 kokoro-onnx soundfile
+docling
+
+chroma
