@@ -52,7 +52,10 @@ Tool usage rules:
 - Issue a single, specific search query to 'guia_profesorado'. Be precise.
 - If the first search returns clearly irrelevant chunks, refine the query once and retry.
 - After two attempts without a relevant result, tell the user the information
-  was not found in the guide and suggest contacting the school secretary directly."""
+  was not found in the guide and suggest contacting the school secretary directly.
+  
+"""
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Full prompts per profile
