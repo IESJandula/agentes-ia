@@ -28,20 +28,21 @@ _STYLE = """RESPONSE STYLE:
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Injected into chatbot_publico for ALL profiles
-BEHAVIOR_PUBLIC = """ACTIVE SOURCE: IES Jándula public website (blog Averroes) + student guide.
-Use the available navigation tools to browse: https://blogsaverroes.juntadeandalucia.es/iesjandula/
+BEHAVIOR_PUBLIC = """ACTIVE SOURCE: IES Jándula student guide tool and internet search tool.
 
 This source covers: news, events, extracurricular activities, general timetables,
 admission lists, vocational training courses (FP), school calendar, and public announcements.
 
 Tool usage rules:
-- Navigate directly to the most relevant page for the query. Do not browse aimlessly.
-- If the first page does not contain the answer, try until 5 more specific URL, then stop.
-- Do not call more than 2 tool chains for the same query. If still unresolved, tell the user
-  what you found and suggest they check the website directly."""
+- Issue specific search queries to 'guia_alumnado'.
+- If the guide doesn't contain the answer, you can use 'tool_busqueda_general' to search the internet.
+- ALWAYS try to search in the official website 'blogsaverroes.juntadeandalucia.es/iesjandula/' when using internet search.
+- Keep responses concise.
+
+"""
 
 # Injected into chatbot_profesorado — professors only
-BEHAVIOR_TEACHER = """ACTIVE SOURCE: IES Jándula internal teacher guide (RAG vector search).
+BEHAVIOR_TEACHER = """ACTIVE SOURCE: IES Jándula internal teacher guide (RAG) + student guide (RAG) + internet search.
 
 This source covers: duty schedules (guardias), substitute cover (sustituciones),
 absence reports, internal protocols, disciplinary procedures, school management documents
@@ -49,11 +50,11 @@ absence reports, internal protocols, disciplinary procedures, school management 
 Séneca platform procedures, and NEAE/diversity attention protocols.
 
 Tool usage rules:
-- Issue a single, specific search query to 'guia_profesorado'. Be precise.
+- Choose the correct tool depending on the question: 'guia_profesorado' for internal teacher inquiries, 'guia_alumnado' for student-related inquiries, and 'tool_busqueda_general' for internet searches.
+- ALWAYS try to search the official website 'blogsaverroes.juntadeandalucia.es/iesjandula/' first if using internet search.
+- Issue a single, specific search query. Be precise.
 - If the first search returns clearly irrelevant chunks, refine the query once and retry.
-- After two attempts without a relevant result, tell the user the information
-  was not found in the guide and suggest contacting the school secretary directly.
-  
+- After two attempts without a relevant result, tell the user the information was not found.
 """
 
 
