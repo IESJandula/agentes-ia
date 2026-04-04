@@ -17,10 +17,10 @@ tool_busqueda_general = TavilySearch(
     max_results=3,
     tavily_api_key=api_key,
     description=(
-        "Busca información en internet sobre temas generales "
-        "no cubiertos por las guías internas del IES Jándula. "
-        "Útil para normativa educativa externa (Junta de Andalucía, BOE), "
-        "noticias del sector educativo o consultas que no son específicas del centro. "
-        "NO usar para información interna del IES Jándula."
+        "Busca información en internet sobre temas generales o información de la web pública de IES Jándula. "
+        "Si buscas información sobre el IES Jándula (ej: secretaría, horarios, matrículas, noticias del centro), "
+        "PRIORIZA buscar en su web oficial añadiendo 'site:blogsaverroes.juntadeandalucia.es/iesjandula' a tu consulta. "
+        "También puedes buscar en webs oficiales de la Junta de Andalucía u otras si es necesario para normativa externa. "
+        "NO uses esto para consultas internas confidenciales de profesores."
     )
 )
