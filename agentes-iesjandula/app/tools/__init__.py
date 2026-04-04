@@ -14,28 +14,29 @@ async def obtener_tools_publicas() -> list:
         tool_busqueda_general,
     ]
 
-    try:
-        herramientas_playwright = await get_playwright_tools()
-        herramientas.extend(herramientas_playwright)
-    except Exception as e:
-        print(f"⚠️ Error cargando Playwright: {e}")
+#    try:
+#        herramientas_playwright = await get_playwright_tools()
+#        herramientas.extend(herramientas_playwright)
+#    except Exception as e:
+#        print(f"⚠️ Error cargando Playwright: {e}")
 
     return herramientas
 
 
 async def obtener_tools_profesorado() -> list:
     """
-    Tools EXCLUSIVAS para profesores: solo la guía interna.
+    Tools para profesores: guía interna, guía alumnado (también accesible) y búsqueda.
     """
     herramientas = [
         guia_profesorado,
+        guia_alumnado,
         tool_busqueda_general,
     ]
-    try:
-        herramientas_playwright = await get_playwright_tools()
-        herramientas.extend(herramientas_playwright)
-    except Exception as e:
-        print(f"⚠️ Error cargando Playwright: {e}")
+#    try:
+#        herramientas_playwright = await get_playwright_tools()
+#        herramientas.extend(herramientas_playwright)
+#    except Exception as e:
+#        print(f"⚠️ Error cargando Playwright: {e}")
 
     return herramientas
 
