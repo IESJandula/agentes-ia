@@ -50,7 +50,7 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
     PROMPT_PROF = PROMPTS[perfil] + "\n\n" + BEHAVIOR_TEACHER + (REGLAS_VOZ if es_voz else "")
 
     # ── 3. LLMs ─────────────────────────────────────────────────────────────
-    _base_llm    = ChatOllama(model="gemma4:e2b", temperature=0.1)
+    _base_llm    = ChatOllama(model="qwen3.5:9b", temperature=0.1)
     llm_clasif   = _base_llm                                      # sin tools
     llm_pub      = _base_llm.bind_tools(tools_pub)
     llm_prof     = _base_llm.bind_tools(tools_prof) if tools_prof else _base_llm
@@ -96,18 +96,33 @@ Ante la duda responde: publica""")
 
     # ── Chatbot público ───────────────────────────────────────────────────────
     def chatbot_publico(estado: Estado) -> dict:
-        system = SystemMessage(content=PROMPT_PUB)
+        contexto_adicional = ""
+        # Buscar todos los ToolMessages recientes al final del historial
+        for msg in reversed(estado["messages"]):
+            if isinstance(msg, ToolMessage):
+                contexto_adicional = f"\n\nCONTEXTO DE TOOL ({msg.name}):\n{msg.content}" + contexto_adicional
+            elif getattr(msg, "tool_calls", None):
+                break  # Detenerse en el AI message que llamó a la herramienta
+
+        if contexto_adicional:
+            contexto_adicional = f"\n\n=== INFORMACIÓN RECUPERADA ==={contexto_adicional}\n\nUsa esta información para responder."
+            
+        system = SystemMessage(content=PROMPT_PUB + contexto_adicional)
         respuesta = llm_pub.invoke([system] + estado["messages"])
         return {"messages": [respuesta]}
 
     # ── Chatbot profesorado ───────────────────────────────────────────────────
     def chatbot_profesorado(estado: Estado) -> dict:
-        # Filtramos para ver si el último mensaje es de una herramienta (ToolMessage)
-        ultimo_mensaje = estado["messages"][-1]
-        
         contexto_adicional = ""
-        if isinstance(ultimo_mensaje, ToolMessage):
-            contexto_adicional = f"\n\nCONTEXTO RECUPERADO DE LA GUÍA:\n{ultimo_mensaje.content}\n\nUsa esta información para responder brevemente."
+        # Buscar todos los ToolMessages recientes al final del historial
+        for msg in reversed(estado["messages"]):
+            if isinstance(msg, ToolMessage):
+                contexto_adicional = f"\n\nCONTEXTO DE TOOL ({msg.name}):\n{msg.content}" + contexto_adicional
+            elif getattr(msg, "tool_calls", None):
+                break  # Detenerse en el AI message que llamó a la herramienta
+
+        if contexto_adicional:
+            contexto_adicional = f"\n\n=== INFORMACIÓN RECUPERADA ==={contexto_adicional}\n\nUsa esta información para responder."
 
         system = SystemMessage(content=PROMPT_PROF + contexto_adicional)
         
