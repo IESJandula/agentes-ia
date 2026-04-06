@@ -50,7 +50,7 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
     PROMPT_PROF = PROMPTS[perfil] + "\n\n" + BEHAVIOR_TEACHER + (REGLAS_VOZ if es_voz else "")
 
     # ── 3. LLMs ─────────────────────────────────────────────────────────────
-    _base_llm    = ChatOllama(model="qwen3.5:4b", temperature=0.1)
+    _base_llm    = ChatOllama(model="gemma4:e2b", temperature=0.1)
     llm_clasif   = _base_llm                                      # sin tools
     llm_pub      = _base_llm.bind_tools(tools_pub)
     llm_prof     = _base_llm.bind_tools(tools_prof) if tools_prof else _base_llm
