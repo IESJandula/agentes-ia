@@ -7,9 +7,13 @@ from app.api.models import ConsultaResponse
 
 class AgenteController:
     @staticmethod
-    async def handle_chat(pregunta: str, perfil: str = "profesores") -> ConsultaResponse:
+    async def handle_chat(
+        pregunta: str,
+        perfil: str = "profesores",
+        thread_id: str | None = None,
+    ) -> ConsultaResponse:
         try:
-            texto = await agents_service.procesar_chat(pregunta, perfil=perfil)
+            texto = await agents_service.procesar_chat(pregunta, perfil=perfil, thread_id=thread_id)
             return ConsultaResponse(respuesta=texto)
         except Exception as e:
             traceback.print_exc()

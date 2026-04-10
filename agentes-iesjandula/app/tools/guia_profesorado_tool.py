@@ -28,22 +28,31 @@ def guia_profesorado(search: str) -> str:
     """
     print(f"📋 Buscando en guía de profesorado: {search}")
 
-    count = profesores_col.count()
-    print(f"DEBUG: La colección tiene {count} fragmentos.")
-
     resultados = profesores_col.query(
         query_texts=[search],
         n_results=8,
         include=["documents", "metadatas", "distances"]
     )
 
-    docs = resultados["documents"][0]
+    docs      = resultados["documents"][0]
+    distancias = resultados["distances"][0]
+
+    print(f"   [DEBUG] Se encontraron {len(docs)} fragmentos.")
+    for i, (d, dist) in enumerate(zip(docs[:3], distancias[:3])):
+        print(f"   [DEBUG] Fragmento {i+1} (dist: {dist:.4f}): {d[:100]}...")
 
     if not docs:
         return "No se encontró información en la guía del profesorado para esa consulta."
 
+    # Filtra resultados con distancia muy alta (semánticamente irrelevantes)
+    THRESHOLD = 1.4
+    pares = [(d, dist) for d, dist in zip(docs, distancias) if dist <= THRESHOLD]
+
+    if not pares:
+        return "No se encontró información suficientemente relevante en la guía del profesorado."
+
     contexto = ""
-    for i, texto in enumerate(docs):
-        contexto += f"\n--- Fragmento {i+1} ---\n{texto}\n"
+    for i, (texto, dist) in enumerate(pares):
+        contexto += f"\n--- Fragmento {i+1} (relevancia: {1 - dist:.2f}) ---\n{texto}\n"
 
     return contexto

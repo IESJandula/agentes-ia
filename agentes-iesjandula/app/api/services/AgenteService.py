@@ -21,10 +21,20 @@ class AgentsService:
             print(f"✅ Agente {clave} listo.")
         return self._agentes[clave]
 
-    async def procesar_chat(self, pregunta: str, perfil: str = "profesores") -> str:
-        """Maneja consultas de texto puro."""
+    async def procesar_chat(
+        self,
+        pregunta: str,
+        perfil: str = "profesores",
+        thread_id: str | None = None,
+    ) -> str:
+        """Maneja consultas de texto puro.
+        
+        Si no se pasa thread_id se usa 'default' (compatible con el warmup del lifespan).
+        En producción el frontend debería pasar un UUID de sesión.
+        """
+        tid = thread_id or "default"
         agente = await self._get_or_create_agente(perfil, "texto")
-        return await agente.responder(pregunta)
+        return await agente.responder(pregunta, thread_id=tid)
 
     async def procesar_voz(self, audio_file: UploadFile, perfil: str = "profesores") -> tuple[str, str]:
         """Maneja entrada de voz y salida de voz."""

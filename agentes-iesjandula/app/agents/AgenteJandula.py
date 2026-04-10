@@ -18,7 +18,7 @@ class AgenteJandula:
         if self.modo in ["voz", "hibrido"]:
             texto_usuario = self.motor_voz.escuchar(entrada)
 
-        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 40}
+        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 15}
         resultado = await self.grafo.ainvoke({"messages": [("user", texto_usuario)]}, config)
         respuesta_texto = resultado["messages"][-1].content
 
@@ -28,4 +28,5 @@ class AgenteJandula:
         if self.modo == "hibrido":
             return {"transcripcion": texto_usuario, "respuesta": respuesta_texto}
         
+        print(f"🤖 Respuesta enviada ({len(respuesta_texto)} caracteres)")
         return respuesta_texto

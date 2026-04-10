@@ -6,7 +6,11 @@ router = APIRouter(tags=["Agente"])
 
 @router.post("/chat", response_model=ConsultaResponse)
 async def consultar_agente(consulta: ConsultaRequest):
-    return await AgenteController.handle_chat(consulta.pregunta)
+    return await AgenteController.handle_chat(
+        consulta.pregunta,
+        perfil=consulta.perfil,
+        thread_id=consulta.thread_id,
+    )
 
 @router.post("/speak")
 async def consultar_agente_voz(audio_file: UploadFile = File(...)):
