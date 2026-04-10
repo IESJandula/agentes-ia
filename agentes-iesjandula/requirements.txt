@@ -29,3 +29,14 @@ langchain-text-splitters
 
 # --- Utilidades ---
 typing-extensions
+
+# --- Voz ---
+whisper
+gtts
+
+grandalf
+soundfile
+kokoro-onnx soundfile
+docling
+
+chroma
