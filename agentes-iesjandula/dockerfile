@@ -1,29 +1,35 @@
-# 1. Usamos la imagen oficial de Python 3.13 (versión slim para que sea ligera)
-FROM python:3.13-slim
+# 1. Usamos Python 3.12 (actualmente más estable para librerías de IA que 3.13)
+FROM python:3.12-slim
 
-# 2. Configuraciones de Python
+# 2. Configuraciones de entorno
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-
 WORKDIR /app
 
-# 3. Instalamos dependencias del sistema indispensables
-# Nota: Para Python 3.13, 'git' es útil si instalas librerías de IA directo de GitHub
+# 3. Instalamos dependencias del sistema (FFmpeg, Libs de imagen, etc.)
 RUN apt-get update && apt-get install -y \
     build-essential \
     libffi-dev \
     libssl-dev \
     git \
+    ffmpeg \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# 4. Actualizamos pip (vital en versiones nuevas de Python)
-RUN pip install --upgrade pip
-
+# 4. Instalamos las dependencias de Python
+RUN pip install --no-cache-dir --upgrade pip
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# 5. INSTALACIÓN CRÍTICA: Playwright y sus dependencias de sistema
+RUN playwright install --with-deps chromium
+
+# 6. Copiamos el resto de la aplicación
 COPY . .
 
+# 7. Exponemos el puerto
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 8. Comando de ejecución (corregido a main:app)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
