@@ -15,7 +15,7 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-persist_db_path = os.path.join(current_dir, "chroma_db")
+persist_db_path = os.path.join(current_dir, "chroma_db_v3")
 RUTA_PDF_DEFAULT = os.path.join(current_dir, "guia-profesorado.pdf")
 
 # Cliente ChromaDB persistente (singleton de módulo)
@@ -49,6 +49,11 @@ alumnos_col = client.get_or_create_collection(
     name=_COLECCION_ALUMNOS,
     embedding_function=embedding_fn,
 )
+
+# Debug: Mostrar conteo al iniciar
+print(f"📊 [DATABASE] Versión: {os.path.basename(persist_db_path)}")
+print(f"📊 [DATABASE] Documentos en Profesores: {profesores_col.count()}")
+print(f"📊 [DATABASE] Documentos en Alumnos:    {alumnos_col.count()}")
 
 # ---------------------------------------------------------------------------
 # Helpers internos
@@ -131,7 +136,7 @@ def procesar_y_añadir(file_path: str, perfil: str, nombre_original: str = None)
 
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=700,
-        chunk_overlap=100,
+        chunk_overlap=150,  # solapamiento aumentado para no perder contexto entre chunks
     )
     print("✂️ [DEBUG] Fragmentando texto...")
     chunks = text_splitter.split_text(texto)

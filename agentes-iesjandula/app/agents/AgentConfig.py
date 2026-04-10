@@ -42,92 +42,85 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
     map_todo = {**map_pub, **map_prof}
 
     # ── 2. Prompts ───────────────────────────────────────────────────────────
-    prompt_base = PROMPTS.get(perfil, PROMPTS["alumnos"])
-    if es_voz:
-        prompt_base += REGLAS_VOZ
-
-    PROMPT_PUB = PROMPTS[perfil] + "\n\n" + BEHAVIOR_PUBLIC + (REGLAS_VOZ if es_voz else "")
-    PROMPT_PROF = PROMPTS[perfil] + "\n\n" + BEHAVIOR_TEACHER + (REGLAS_VOZ if es_voz else "")
+    _voz_suffix  = REGLAS_VOZ if es_voz else ""
+    PROMPT_PUB  = PROMPTS[perfil] + "\n\n" + BEHAVIOR_PUBLIC  + _voz_suffix
+    PROMPT_PROF = PROMPTS[perfil] + "\n\n" + BEHAVIOR_TEACHER + _voz_suffix
 
     # ── 3. LLMs ─────────────────────────────────────────────────────────────
-    _base_llm    = ChatOllama(model="qwen3.5:9b", temperature=0.1)
-    llm_clasif   = _base_llm                                      # sin tools
-    llm_pub      = _base_llm.bind_tools(tools_pub)
-    llm_prof     = _base_llm.bind_tools(tools_prof) if tools_prof else _base_llm
+    _base_llm  = ChatOllama(model="llama3.1:8b", temperature=0.4)
+    llm_clasif = _base_llm                                      # sin tools
+    llm_pub    = _base_llm.bind_tools(tools_pub)
+    llm_prof   = _base_llm.bind_tools(tools_prof) if tools_prof else _base_llm
 
     # ─────────────────────────────────────────────────────────────────────────
     # Nodos
     # ─────────────────────────────────────────────────────────────────────────
 
-    # ── Clasificador ─────────────────────────────────────────────────────────
-    def clasificar(estado: Estado) -> dict:
-        """Decide si la consulta es pública o interna de profesorado."""
+    # ── Helper: reconstruir contexto de ToolMessages ─────────────────────────
+    def _build_tool_context(estado: Estado) -> str:
+        """Extrae los ToolMessages del turno actual y los formatea como contexto."""
+        contexto = ""
+        for msg in reversed(estado["messages"]):
+            if isinstance(msg, ToolMessage):
+                contexto = f"\n\nCONTEXTO DE TOOL ({msg.name}):\n{msg.content}" + contexto
+            elif getattr(msg, "tool_calls", None):
+                break  # Detenerse en el AI message que inició las llamadas
+        if contexto:
+            contexto = f"\n\n=== INFORMACIÓN RECUPERADA ==={contexto}\n\nUsa esta información para responder con precisión."
+        return contexto
 
-        # perfil viene del closure de configurar_grafo_ies, no del estado
+    # ── Clasificador ─────────────────────────────────────────────────────────
+    async def clasificar(estado: Estado) -> dict:
+        """Decide si la consulta es pública o interna de profesorado."""
         if perfil != "profesores" or not tools_prof:
             return {"tipo_consulta": "publica"}
-        #return {"tipo_consulta": "profesorado"}
+
         ultimo = estado["messages"][-1]
         texto  = ultimo.content if hasattr(ultimo, "content") else str(ultimo)
 
         sys_clasificador = SystemMessage(content="""Eres el router del asistente del IES Jándula.
 Clasifica la consulta del usuario en UNA sola palabra:
 
-  publica     → noticias, eventos, actividades, horarios generales,
-                información para familias o alumnos, instalaciones,
-                transporte, comedor, becas, matrículas.
+  profesorado → planes (acogida, de centro, igualdad), protocolos (incendio, accidentes, evacuación), 
+                normativa interna (NOF, PEC, PGA, ROF, ROFE), CCP, actas, evaluaciones internas,
+                reuniones de departamento, protocolo docente, nombres de profesores o cargos directivos.
 
-  profesorado → guardias, sustituciones, partes de ausencia,
-                NOF, PEC, PGA, ROF, CCP, actas, evaluaciones internas,
-                reuniones de departamento, protocolo docente,
-                nombres de profesores o cargos directivos.
+  publica     → noticias, eventos, actividades extraescolares, horarios generales,
+                información para familias o alumnos, transporte, comedor, becas, matrículas.
 
-Responde ÚNICAMENTE con una de estas dos palabras, sin puntuación ni explicación.
-Ante la duda responde: publica""")
+Responde ÚNICAMENTE con la palabra: profesorado o publica.
+Si el perfil del usuario es PROFESOR y la consulta trata sobre planes o protocolos del centro, elige: profesorado.
+Ante la duda responde: profesorado""")
 
-        respuesta = llm_clasif.invoke([sys_clasificador, HumanMessage(content=texto)])
+        respuesta = await llm_clasif.ainvoke([sys_clasificador, HumanMessage(content=texto)])
         raw = respuesta.content.strip().lower()
 
         tipo: Literal["publica", "profesorado"] = (
-            "profesorado" if "profesorado" in raw else "publica"
+            "profesorado" if any(x in raw for x in ["profesor", "docente", "interna"]) else "publica"
         )
         print(f"🔀 Clasificador → {tipo}  (raw: '{raw}')")
         return {"tipo_consulta": tipo}
 
     # ── Chatbot público ───────────────────────────────────────────────────────
-    def chatbot_publico(estado: Estado) -> dict:
-        contexto_adicional = ""
-        # Buscar todos los ToolMessages recientes al final del historial
-        for msg in reversed(estado["messages"]):
-            if isinstance(msg, ToolMessage):
-                contexto_adicional = f"\n\nCONTEXTO DE TOOL ({msg.name}):\n{msg.content}" + contexto_adicional
-            elif getattr(msg, "tool_calls", None):
-                break  # Detenerse en el AI message que llamó a la herramienta
-
-        if contexto_adicional:
-            contexto_adicional = f"\n\n=== INFORMACIÓN RECUPERADA ==={contexto_adicional}\n\nUsa esta información para responder."
+    async def chatbot_publico(estado: Estado) -> dict:
+        # Poda de historial: mantenemos los últimos 10 mensajes para no saturar al modelo
+        mensajes = estado["messages"]
+        if len(mensajes) > 10:
+            mensajes = mensajes[-10:]
             
-        system = SystemMessage(content=PROMPT_PUB + contexto_adicional)
-        respuesta = llm_pub.invoke([system] + estado["messages"])
+        system = SystemMessage(content=PROMPT_PUB + _build_tool_context(estado))
+        respuesta = await llm_pub.ainvoke([system] + mensajes)
         return {"messages": [respuesta]}
 
     # ── Chatbot profesorado ───────────────────────────────────────────────────
-    def chatbot_profesorado(estado: Estado) -> dict:
-        contexto_adicional = ""
-        # Buscar todos los ToolMessages recientes al final del historial
-        for msg in reversed(estado["messages"]):
-            if isinstance(msg, ToolMessage):
-                contexto_adicional = f"\n\nCONTEXTO DE TOOL ({msg.name}):\n{msg.content}" + contexto_adicional
-            elif getattr(msg, "tool_calls", None):
-                break  # Detenerse en el AI message que llamó a la herramienta
+    async def chatbot_profesorado(estado: Estado) -> dict:
+        # Poda de historial
+        mensajes = estado["messages"]
+        if len(mensajes) > 10:
+            mensajes = mensajes[-10:]
 
-        if contexto_adicional:
-            contexto_adicional = f"\n\n=== INFORMACIÓN RECUPERADA ==={contexto_adicional}\n\nUsa esta información para responder."
-
-        system = SystemMessage(content=PROMPT_PROF + contexto_adicional)
-        
-        # Invocamos solo con el historial relevante
-        respuesta = llm_prof.invoke([system] + estado["messages"])
+        system = SystemMessage(content=PROMPT_PROF + _build_tool_context(estado))
+        respuesta = await llm_prof.ainvoke([system] + mensajes)
         return {"messages": [respuesta]}
 
     # ── Ejecutor de tools ─────────────────────────────────────────────────────
@@ -223,6 +216,8 @@ Ante la duda responde: publica""")
     )
 
     grafo = builder.compile(checkpointer=MemorySaver())
+    # recursion_limit reducido: 15 ciclos son más que suficientes
+    # y protegen contra bucles infinitos de tool-calling
 
     # ── Imagen del grafo ─────────────────────────────────────────────────────
     _guardar_imagen_grafo(grafo)

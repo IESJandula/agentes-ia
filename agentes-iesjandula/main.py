@@ -66,7 +66,7 @@ if __name__ == "__main__":
         "main:app", 
         host="127.0.0.1", 
         port=8000, 
-        reload=False,
+        reload=True,
         timeout_keep_alive=300,
         timeout_notify=300
     )
