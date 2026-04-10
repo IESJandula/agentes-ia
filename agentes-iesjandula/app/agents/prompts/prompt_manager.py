@@ -28,15 +28,18 @@ _STYLE = """RESPONSE STYLE:
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Injected into chatbot_publico for ALL profiles
-BEHAVIOR_PUBLIC = """ACTIVE SOURCE: IES Jándula student guide tool and internet search tool.
+BEHAVIOR_PUBLIC = """ACTIVE SOURCE: Internet search (primary) and student guide (secondary).
 
-This source covers: news, events, extracurricular activities, general timetables,
+This source covers: news, clubs, events, extracurricular activities, general timetables,
 admission lists, vocational training courses (FP), school calendar, and public announcements.
 
 Tool usage rules:
-- Issue specific search queries to 'guia_alumnado'.
-- If the guide doesn't contain the answer, you can use 'tool_busqueda_general' to search the internet.
-- ALWAYS try to search in the official website 'blogsaverroes.juntadeandalucia.es/iesjandula/' when using internet search.
+- For greetings or general conversation: respond DIRECTLY without using any tool.
+- For news, clubs, events, and school notices: ALWAYS use 'tavily_search' first, as these are primarily on the school website.
+- IMPORTANT FOR SEARCH: Always append '2025' or '2026' and 'site:blogsaverroes.juntadeandalucia.es/iesjandula' to your query.
+- For specific academic procedures or historical rules: you may check 'guia_alumnado', but if it returns no results, fallback to 'tavily_search' immediately.
+- If you find data for older years (like 2023), ignore it and look for the current year.
+- Do NOT call a tool more than twice for the same question.
 - Keep responses concise.
 
 """
@@ -50,11 +53,15 @@ absence reports, internal protocols, disciplinary procedures, school management 
 Séneca platform procedures, and NEAE/diversity attention protocols.
 
 Tool usage rules:
-- Choose the correct tool depending on the question: 'guia_profesorado' for internal teacher inquiries, 'guia_alumnado' for student-related inquiries, and 'tool_busqueda_general' for internet searches.
-- ALWAYS try to search the official website 'blogsaverroes.juntadeandalucia.es/iesjandula/' first if using internet search.
-- Issue a single, specific search query. Be precise.
-- If the first search returns clearly irrelevant chunks, refine the query once and retry.
-- After two attempts without a relevant result, tell the user the information was not found.
+- For greetings or questions you can confidently answer from memory: respond DIRECTLY without using any tool.
+- For specific IES Jándula data (dates, names, rules, procedures): ALWAYS use 'guia_profesorado' or 'guia_alumnado'.
+- IMPORTANT FOR DATES: Always append '2025' or '2026' to your search queries. If you find data for older years, ignore it and look for the current year.
+- IF NO RESULTS: If a specific term returns no results, try synonyms or related terms (e.g., if 'protocolo de incendios' fails, try 'evacuación' or 'emergencia').
+- For web searches: use 'tavily_search'. ALWAYS include 'site:blogsaverroes.juntadeandalucia.es/iesjandula' in the query.
+- Issue a single, specific search query per tool call. Be precise.
+- If the first search returns clearly irrelevant chunks, refine the query ONCE and retry.
+- After two failed attempts, tell the user the information was not found in our sources.
+- Do NOT call the same tool more than twice for the same question.
 """
 
 

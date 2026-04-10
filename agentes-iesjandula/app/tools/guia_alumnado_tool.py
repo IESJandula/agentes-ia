@@ -25,13 +25,25 @@ def guia_alumnado(search: str) -> str:
         str: Información relevante de la guía del alumnado.
     """
     print(f"📚 Buscando en guía de alumnado: {search}")
-    docs = alumnos_col.similarity_search(search, k=8)
+    
+    resultados = alumnos_col.query(
+        query_texts=[search],
+        n_results=8,
+        include=["documents", "distances"]
+    )
+    
+    docs = resultados["documents"][0] if resultados["documents"] else []
+    distancias = resultados["distances"][0] if resultados["distances"] else []
+
+    print(f"   [DEBUG] Se encontraron {len(docs)} fragmentos en Alumnado.")
+    for i, (d, dist) in enumerate(zip(docs[:3], distancias[:3])):
+         print(f"   [DEBUG] Fragmento {i+1} (dist: {dist:.4f}): {d[:100]}...")
 
     if not docs:
         return "No se encontró información en la guía del alumnado para esa consulta."
 
     contexto = ""
-    for i, doc in enumerate(docs):
-        contexto += f"\n--- Fragmento {i+1} ---\n{doc.page_content}\n"
+    for i, doc_text in enumerate(docs):
+        contexto += f"\n--- Fragmento {i+1} ---\n{doc_text}\n"
 
     return contexto
