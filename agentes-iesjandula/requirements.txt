@@ -39,4 +39,8 @@ soundfile
 kokoro-onnx soundfile
 docling
 
-chroma
+chromadb
+
+# --- Base de Datos / Sistema ---
+pysqlite3-binary
+gunicorn
