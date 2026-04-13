@@ -21,10 +21,12 @@ RUTA_PDF_DEFAULT = os.path.join(current_dir, "guia-profesorado.pdf")
 # Cliente ChromaDB persistente (singleton de módulo)
 client = chromadb.PersistentClient(path=persist_db_path)
 
-# Función de embedding compartida
+# Función de embedding compartida (permite configurar URL por entorno para Docker)
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+
 embedding_fn = OllamaEmbeddingFunction(
     model_name="qwen3-embedding:4b",
-    url="http://localhost:11434",
+    url=OLLAMA_URL,
 )
 
 # Conversor Docling (singleton de módulo)
