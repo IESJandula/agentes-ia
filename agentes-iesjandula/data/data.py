@@ -19,7 +19,12 @@ persist_db_path = os.path.join(current_dir, "chroma_db_v3")
 RUTA_PDF_DEFAULT = os.path.join(current_dir, "guia-profesorado.pdf")
 
 # Cliente ChromaDB persistente (singleton de módulo)
-client = chromadb.PersistentClient(path=persist_db_path)
+#client = chromadb.PersistentClient(path=persist_db_path)
+
+chroma_host = os.getenv("CHROMA_SERVER_HOST", "localhost")
+chroma_port = os.getenv("CHROMA_SERVER_HTTP_PORT", "8000")
+
+client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
 
 # Función de embedding compartida (permite configurar URL por entorno para Docker)
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
