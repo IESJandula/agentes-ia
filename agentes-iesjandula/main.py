@@ -89,7 +89,7 @@ async def serve_index():
 if __name__ == "__main__":
     import os
 
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 8010))
 
     uvicorn.run(
         "main:app",
