@@ -36,7 +36,8 @@ gtts
 
 grandalf
 soundfile
-kokoro-onnx soundfile
+kokoro-onnx 
+soundfile
 docling
 
 chromadb
