@@ -24,7 +24,7 @@ def guia_alumnado(search: str) -> str:
     Returns:
         str: Información relevante de la guía del alumnado.
     """
-    print(f"📚 Buscando en guía de alumnado: {search}")
+    print(f"\n📚 [TOOL: guia_alumnado] Query: {search}")
     
     resultados = alumnos_col.query(
         query_texts=[search],
