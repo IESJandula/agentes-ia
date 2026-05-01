@@ -5,6 +5,7 @@ Grafo LangGraph con routing por perfil (alumnos / profesores).
 
 from __future__ import annotations
 
+import uuid
 from typing import Annotated, Literal
 from typing_extensions import TypedDict
 
@@ -12,7 +13,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_ollama import ChatOllama
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, SystemMessage, HumanMessage, ToolMessage
 
 from app.tools import obtener_tools_publicas, obtener_tools_profesorado
 from .prompts.prompt_manager import PROMPTS, BEHAVIOR_PUBLIC, BEHAVIOR_TEACHER, REGLAS_VOZ
@@ -56,6 +57,26 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
     # Nodos
     # ─────────────────────────────────────────────────────────────────────────
 
+    # ── Helper: detectar saludos simples ───────────────────────────────────
+    _SALUDOS = [
+        "hola", "buenos días", "buenas tardes", "buenas noches",
+        "gracias", "muchas gracias", "adiós", "hasta luego",
+        "bye", "ok", "vale", "de acuerdo", "entendido",
+    ]
+
+    def _es_saludo(texto: str) -> bool:
+        """Detecta si el texto es un saludo o respuesta simple que no requiere tool."""
+        limpio = texto.strip().lower().rstrip(".,!?¿¡")
+        # Coincidencia exacta o inicio de saludo
+        return any(limpio == s or limpio.startswith(s + " ") for s in _SALUDOS) and len(limpio) < 40
+
+    # ── Helper: obtener último mensaje del usuario ────────────────────────────
+    def _ultimo_mensaje_usuario(estado: Estado) -> str | None:
+        for m in reversed(estado["messages"]):
+            if isinstance(m, HumanMessage):
+                return m.content
+        return None
+
     # ── Helper: reconstruir contexto de ToolMessages ─────────────────────────
     def _build_tool_context(estado: Estado) -> str:
         """Extrae los ToolMessages del turno actual y los formatea como contexto."""
@@ -66,7 +87,7 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
             elif getattr(msg, "tool_calls", None):
                 break  # Detenerse en el AI message que inició las llamadas
         if contexto:
-            contexto = f"\n\n=== INFORMACIÓN RECUPERADA ==={contexto}\n\nUsa esta información para responder con precisión."
+            contexto = f"\n\n=== INFORMACIÓN RECUPERADA (USA ESTO PARA RESPONDER) ==={contexto}\n\nINSTRUCCIÓN: Responde a la pregunta del usuario utilizando ÚNICAMENTE la información anterior. Si la información no es suficiente, indícalo."
         return contexto
 
     # ── Clasificador ─────────────────────────────────────────────────────────
@@ -81,23 +102,33 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
         sys_clasificador = SystemMessage(content="""Eres el router del asistente del IES Jándula.
 Clasifica la consulta del usuario en UNA sola palabra:
 
-  profesorado → planes (acogida, de centro, igualdad), protocolos (incendio, accidentes, evacuación), 
+  profesorado → planes internos (acogida, de centro, igualdad), protocolos (incendio, accidentes, evacuación), 
                 normativa interna (NOF, PEC, PGA, ROF, ROFE), CCP, actas, evaluaciones internas,
-                reuniones de departamento, protocolo docente, nombres de profesores o cargos directivos.
+                reuniones de departamento, protocolo docente, nombres de profesores, tutores o cargos directivos,
+                guardias, sustituciones, partes de ausencia, Séneca.
 
-  publica     → noticias, eventos, actividades extraescolares, horarios generales,
-                información para familias o alumnos, transporte, comedor, becas, matrículas.
+  publica     → noticias, eventos, actividades extraescolares, horarios generales del centro,
+                información para familias o alumnos, transporte, comedor, becas, matrículas,
+                oferta educativa, ciclos formativos, FP, grados, ESO, bachillerato,
+                secretaría, calendario escolar, información pública del centro, tiempo/clima.
 
 Responde ÚNICAMENTE con la palabra: profesorado o publica.
-Si el perfil del usuario es PROFESOR y la consulta trata sobre planes o protocolos del centro, elige: profesorado.
-Ante la duda responde: profesorado""")
+Si la consulta trata sobre DOCUMENTACIÓN INTERNA del profesorado (planes, protocolos, normativa, guardias), elige: profesorado.
+Si la consulta trata sobre INFORMACIÓN PÚBLICA del centro (oferta, ciclos, noticias, eventos, matrículas), elige: publica.
+Ante la duda responde: publica""")
 
         respuesta = await llm_clasif.ainvoke([sys_clasificador, HumanMessage(content=texto)])
         raw = respuesta.content.strip().lower()
 
-        tipo: Literal["publica", "profesorado"] = (
-            "profesorado" if any(x in raw for x in ["profesor", "docente", "interna"]) else "publica"
-        )
+        # Detectar "publica" primero (incluye variantes con/sin tilde)
+        # porque la palabra "profesorado" contiene "profesor" como substring
+        if any(x in raw for x in ["publica", "pública"]):
+            tipo: Literal["publica", "profesorado"] = "publica"
+        elif any(x in raw for x in ["profesorado", "docente", "interna"]):
+            tipo = "profesorado"
+        else:
+            tipo = "publica"  # default seguro
+
         print(f"🔀 Clasificador → {tipo}  (raw: '{raw}')")
         return {"tipo_consulta": tipo}
 
@@ -107,9 +138,26 @@ Ante la duda responde: profesorado""")
         mensajes = estado["messages"]
         if len(mensajes) > 10:
             mensajes = mensajes[-10:]
-            
-        system = SystemMessage(content=PROMPT_PUB + _build_tool_context(estado))
+
+        tool_context = _build_tool_context(estado)
+        system = SystemMessage(content=PROMPT_PUB + tool_context)
         respuesta = await llm_pub.ainvoke([system] + mensajes)
+
+        # ── GUARDRAIL: forzar búsqueda si el LLM no llamó herramientas y no hay contexto ──
+        has_context = any(isinstance(m, ToolMessage) for m in mensajes[-3:])
+        if not getattr(respuesta, "tool_calls", None) and not has_context:
+            query_usuario = _ultimo_mensaje_usuario(estado)
+            if query_usuario and not _es_saludo(query_usuario):
+                print(f"⚠️ [GUARDRAIL] LLM no llamó herramientas. Forzando búsqueda web: '{query_usuario}'")
+                respuesta = AIMessage(
+                    content="",
+                    tool_calls=[{
+                        "id": f"forced_{uuid.uuid4().hex[:8]}",
+                        "name": "busqueda_web_ies_jandula",
+                        "args": {"query": query_usuario + " IES Jándula 2025"},
+                    }],
+                )
+
         return {"messages": [respuesta]}
 
     # ── Chatbot profesorado ───────────────────────────────────────────────────
@@ -119,8 +167,25 @@ Ante la duda responde: profesorado""")
         if len(mensajes) > 10:
             mensajes = mensajes[-10:]
 
-        system = SystemMessage(content=PROMPT_PROF + _build_tool_context(estado))
+        tool_context = _build_tool_context(estado)
+        system = SystemMessage(content=PROMPT_PROF + tool_context)
         respuesta = await llm_prof.ainvoke([system] + mensajes)
+
+        # ── GUARDRAIL: forzar búsqueda si el LLM no llamó herramientas y no hay contexto ──
+        has_context = any(isinstance(m, ToolMessage) for m in mensajes[-3:])
+        if not getattr(respuesta, "tool_calls", None) and not has_context:
+            query_usuario = _ultimo_mensaje_usuario(estado)
+            if query_usuario and not _es_saludo(query_usuario):
+                print(f"⚠️ [GUARDRAIL] LLM no llamó herramientas. Forzando búsqueda RAG: '{query_usuario}'")
+                respuesta = AIMessage(
+                    content="",
+                    tool_calls=[{
+                        "id": f"forced_{uuid.uuid4().hex[:8]}",
+                        "name": "guia_profesorado",
+                        "args": {"search": query_usuario},
+                    }],
+                )
+
         return {"messages": [respuesta]}
 
     # ── Ejecutor de tools ─────────────────────────────────────────────────────
@@ -140,8 +205,11 @@ Ante la duda responde: profesorado""")
                         f"en la rama '{tipo}'. Usa solo las herramientas permitidas."
                     )
                 else:
+                    print(f"\n🛠️  [EJECUTANDO TOOL: {nombre}] con args: {call['args']}")
                     obs = await mapa[nombre].ainvoke(call["args"])
+                    print(f"   ✅ [TOOL {nombre} COMPLETADA] Respuesta (truncada): {str(obs)[:300]}...")
             except Exception as e:
+                print(f"   ❌ [ERROR EN TOOL {nombre}]: {e}")
                 obs = f"Error en herramienta '{nombre}': {e}"
 
             results.append(ToolMessage(
