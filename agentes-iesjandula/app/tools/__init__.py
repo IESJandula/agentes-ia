@@ -1,6 +1,6 @@
 from .guia_profesorado_tool import guia_profesorado
 from .guia_alumnado_tool import guia_alumnado
-from .tavily_busqueda_tool import tool_busqueda_general
+from .tavily_busqueda_tool import tool_busqueda_web_centro, tool_busqueda_general
 from .playwright_busqueda_tool import get_playwright_tools
 
 
@@ -11,7 +11,8 @@ async def obtener_tools_publicas() -> list:
     """
     herramientas = [
         guia_alumnado,
-        tool_busqueda_general,
+        tool_busqueda_web_centro,   # búsqueda en la web del IES Jándula
+        tool_busqueda_general,       # búsqueda general en internet
     ]
 
 #    try:
@@ -30,7 +31,8 @@ async def obtener_tools_profesorado() -> list:
     herramientas = [
         guia_profesorado,
         guia_alumnado,
-        tool_busqueda_general,
+        tool_busqueda_web_centro,   # búsqueda en la web del IES Jándula
+        tool_busqueda_general,       # búsqueda general en internet
     ]
 #    try:
 #        herramientas_playwright = await get_playwright_tools()

@@ -1,3 +1,4 @@
+import gc
 import os
 import uuid
 
@@ -6,7 +7,10 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 import chromadb
 from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
-from docling.document_converter import DocumentConverter
+from pypdf import PdfReader
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
 
 load_dotenv()
 
@@ -35,7 +39,22 @@ embedding_fn = OllamaEmbeddingFunction(
 )
 
 # Conversor Docling (singleton de módulo)
-converter = DocumentConverter()
+# Pipeline optimizada: desactiva generación de imágenes para reducir consumo de RAM
+_pdf_pipeline_options = PdfPipelineOptions(
+    do_table_structure=True,
+    do_ocr=True,
+    generate_page_images=False,
+    generate_picture_images=False,
+    generate_table_images=False,
+)
+converter = DocumentConverter(
+    format_options={
+        InputFormat.PDF: PdfFormatOption(pipeline_options=_pdf_pipeline_options),
+    }
+)
+
+# Número de páginas por lote para Docling (evita std::bad_alloc en PDFs grandes)
+DOCLING_PAGE_BATCH_SIZE = 8
 
 # Colecciones — se crean si no existen
 # Nombres internos de ChromaDB
@@ -78,50 +97,110 @@ def obtener_coleccion(perfil: str):
     raise ValueError(f"Perfil desconocido: '{perfil}'. Usa 'profesores' o 'alumnos'.")
 
 
+def _contar_paginas_pdf(file_path: str) -> int:
+    """Devuelve el número de páginas de un PDF usando pypdf."""
+    try:
+        reader = PdfReader(file_path)
+        return len(reader.pages)
+    except Exception as e:
+        print(f"⚠️ [DEBUG] No se pudo contar páginas con pypdf: {e}")
+        return 0
+
+
+def _extraer_texto_docling_por_lotes(file_path: str, total_pages: int) -> str:
+    """
+    Procesa un PDF con Docling en lotes de DOCLING_PAGE_BATCH_SIZE páginas.
+    Llama a gc.collect() entre lotes para liberar memoria y evitar std::bad_alloc.
+    """
+    batch = DOCLING_PAGE_BATCH_SIZE
+    partes_md = []
+    lotes_ok = 0
+    lotes_fail = 0
+
+    print(f"📄 [DEBUG] PDF con {total_pages} páginas → lotes de {batch}")
+
+    for start in range(1, total_pages + 1, batch):
+        end = min(start + batch - 1, total_pages)
+        lote_num = (start // batch) + 1
+        print(f"   📖 Lote {lote_num}: páginas {start}–{end} ...", end=" ")
+        try:
+            result = converter.convert(file_path, page_range=(start, end))
+            texto_lote = result.document.export_to_markdown()
+            if texto_lote and texto_lote.strip():
+                partes_md.append(texto_lote)
+                lotes_ok += 1
+                print("✅")
+            else:
+                lotes_fail += 1
+                print("⚠️ vacío")
+        except Exception as e:
+            lotes_fail += 1
+            print(f"❌ {e}")
+        finally:
+            # Liberar memoria entre lotes
+            gc.collect()
+
+    print(f"   📊 Resumen: {lotes_ok} lotes OK, {lotes_fail} lotes fallidos")
+    return "\n\n".join(partes_md)
+
+
 def _extraer_texto(file_path: str) -> str:
     """
     Extrae el texto de un archivo.
-    Intenta PyPDFLoader para PDFs; usa Docling como fallback o para imágenes.
-    Devuelve el texto plano extraído.
+    Prioriza Docling para todos los formatos (PDF, imágenes, etc.) por su capacidad OCR y de estructura.
+    Para PDFs, procesa en lotes de páginas para evitar errores de memoria (std::bad_alloc).
+    Usa PyPDFLoader como fallback específico para PDFs si Docling falla.
     """
     ext = os.path.splitext(file_path)[1].lower()
     print(f"🔍 [DEBUG] Procesando: {file_path}  (ext: {ext})")
 
+    # 1. Intentar con Docling (Prioridad máxima)
+    try:
+        print("--- [DEBUG] Intentando extracción con Docling...")
+
+        if ext == ".pdf":
+            # PDFs: procesar por lotes de páginas para evitar bad_alloc
+            total_pages = _contar_paginas_pdf(file_path)
+            if total_pages > 0:
+                texto = _extraer_texto_docling_por_lotes(file_path, total_pages)
+            else:
+                # Si no pudimos contar páginas, intentar de golpe como último recurso
+                print("   ⚠️ No se pudo contar páginas, intentando conversión completa...")
+                result = converter.convert(file_path)
+                texto = result.document.export_to_markdown()
+        else:
+            # No-PDF (imágenes, etc.): procesar de una vez
+            result = converter.convert(file_path)
+            texto = result.document.export_to_markdown()
+
+        if texto and texto.strip():
+            print("✅ [DEBUG] Extracción con Docling OK.")
+            return texto
+        print("⚠️ [DEBUG] Docling devolvió texto vacío.")
+    except Exception as e:
+        print(f"⚠️ [DEBUG] Docling falló: {e}")
+
+    # 2. Fallback según extensión
     if ext == ".pdf":
         try:
-            print("--- [DEBUG] Intentando PyPDFLoader...")
+            print("--- [DEBUG] Fallback: Intentando PyPDFLoader...")
             loader = PyPDFLoader(file_path)
             docs = loader.load()
             texto = "\n\n".join(d.page_content for d in docs)
             print(f"✅ [DEBUG] PyPDFLoader OK: {len(docs)} páginas.")
             return texto
         except Exception as e:
-            print(f"⚠️ [DEBUG] PyPDFLoader falló ({e}). Usando Docling...")
-            result = converter.convert(file_path)
-            texto = result.document.export_to_markdown()
-            print("✅ [DEBUG] Docling OK (fallback PDF).")
-            return texto
-
-    if ext in (".png", ".jpg", ".jpeg", ".tiff", ".bmp"):
-        print("--- [DEBUG] Imagen → Docling OCR...")
-        result = converter.convert(file_path)
-        texto = result.document.export_to_markdown()
-        print("✅ [DEBUG] Docling OCR OK.")
-        return texto
+            print(f"❌ [DEBUG] Todos los extractores fallaron para PDF: {e}")
 
     if ext in (".md", ".txt"):
-        print(f"--- [DEBUG] Texto plano ({ext})...")
-        with open(file_path, "r", encoding="utf-8") as f:
-            texto = f.read()
-        print("✅ [DEBUG] Texto cargado.")
-        return texto
+        try:
+            print(f"--- [DEBUG] Fallback: Lectura de texto plano ({ext})...")
+            with open(file_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as e:
+            print(f"❌ [DEBUG] Error leyendo archivo de texto: {e}")
 
-    # Formato desconocido → intentar Docling
-    print(f"--- [DEBUG] Formato '{ext}' desconocido → Docling...")
-    result = converter.convert(file_path)
-    texto = result.document.export_to_markdown()
-    print(f"✅ [DEBUG] Docling OK para '{ext}'.")
-    return texto
+    return ""
 
 # ---------------------------------------------------------------------------
 # Lógica principal de procesamiento
@@ -212,42 +291,49 @@ def subir_nuevo_documento(file_path: str, perfil: str, nombre_original: str = No
 def listar_documentos_en_coleccion(perfil: str) -> list[str]:
     """
     Devuelve una lista ordenada de nombres de archivo únicos presentes
-    en la colección del perfil indicado (extraídos del metadato 'source').
+    en la colección del perfil indicado.
     """
     coleccion = obtener_coleccion(perfil)
+    
+    # Obtenemos TODOS los metadatos sin límite (limit=None o un número muy alto)
+    # Algunas versiones de Chroma requieren un número explícito si no se quiere límite
     resultado = coleccion.get(include=["metadatas"])
 
-    if not resultado["metadatas"]:
+    if not resultado or not resultado.get("metadatas"):
         return []
 
-    archivos = {
-        os.path.basename(meta["source"])
-        for meta in resultado["metadatas"]
-        if meta and "source" in meta
-    }
-    return sorted(archivos)
+    archivos = set()
+    for meta in resultado["metadatas"]:
+        if meta and "source" in meta:
+            # Normalizamos el nombre: solo el nombre del archivo, sin rutas
+            nombre = os.path.basename(str(meta["source"]))
+            if nombre:
+                archivos.add(nombre)
+    
+    return sorted(list(archivos))
 
 
 def eliminar_documento_de_coleccion(perfil: str, nombre_archivo: str) -> dict:
     """
     Elimina todos los chunks cuyo metadato 'source' coincida con 'nombre_archivo'.
-    Devuelve {'status': 'success'|'error', 'message': str, 'chunks_eliminados': int}.
     """
     coleccion = obtener_coleccion(perfil)
 
     try:
+        # Obtenemos los IDs y metadatos para buscar la coincidencia
         datos = coleccion.get(include=["metadatas"])
 
-        ids_a_borrar = [
-            id_
-            for id_, meta in zip(datos["ids"], datos["metadatas"])
-            if os.path.basename(meta.get("source", "")) == nombre_archivo
-        ]
+        ids_a_borrar = []
+        for id_, meta in zip(datos["ids"], datos["metadatas"]):
+            if meta and "source" in meta:
+                # Comparamos solo el nombre del archivo (ignorando rutas)
+                if os.path.basename(str(meta["source"])) == nombre_archivo:
+                    ids_a_borrar.append(id_)
 
         if not ids_a_borrar:
             return {
                 "status": "error",
-                "message": f"No se encontró el archivo '{nombre_archivo}' en la colección '{perfil}'.",
+                "message": f"No se encontraron fragmentos para '{nombre_archivo}'.",
             }
 
         coleccion.delete(ids=ids_a_borrar)

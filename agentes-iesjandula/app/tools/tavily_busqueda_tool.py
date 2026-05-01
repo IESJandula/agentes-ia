@@ -11,16 +11,47 @@ if api_key is None:
 else:
     os.environ["TAVILY_API_KEY"] = api_key
 
-# max_results=3 es suficiente — más resultados no mejoran la respuesta
-# y aumentan el contexto innecesariamente con Ollama local
-tool_busqueda_general = TavilySearch(
+from langchain_core.tools import tool
+
+# Herramienta base de Tavily (privada, se usará dentro de los wrappers)
+_tavily_centro = TavilySearch(
+    max_results=5,
+    tavily_api_key=api_key,
+    include_domains=["blogsaverroes.juntadeandalucia.es"],
+    name="busqueda_web_ies_jandula_raw",
+)
+
+_tavily_general = TavilySearch(
     max_results=3,
     tavily_api_key=api_key,
-    description=(
-        "Busca información en internet sobre temas generales o información de la web pública de IES Jándula. "
-        "Si buscas información sobre el IES Jándula (ej: secretaría, horarios, matrículas, noticias del centro), "
-        "PRIORIZA buscar en su web oficial añadiendo 'site:blogsaverroes.juntadeandalucia.es/iesjandula' a tu consulta. "
-        "También puedes buscar en webs oficiales de la Junta de Andalucía u otras si es necesario para normativa externa. "
-        "NO uses esto para consultas internas confidenciales de profesores."
-    )
+    name="busqueda_web_general_raw",
 )
+
+@tool
+def busqueda_web_ies_jandula(search: str) -> str:
+    """Busca información en la web oficial del IES Jándula (blog Averroes).
+    USA ESTA HERRAMIENTA para: noticias del centro, eventos, actividades extraescolares,
+    horarios generales, matrículas, secretaría, plazos, FP, ciclos formativos,
+    calendario escolar, y cualquier información pública del IES Jándula.
+    NO necesitas añadir 'site:' a la consulta, el filtro de dominio se aplica automáticamente.
+    Añade el año '2025' o '2026' a tu búsqueda para obtener resultados actualizados."""
+    print(f"\n🌐 [TOOL: busqueda_web_ies_jandula] Query: {search}")
+    resultado = _tavily_centro.invoke(search)
+    print(f"   [DEBUG] Resultados obtenidos (Tavily Centro): {str(resultado)[:200]}...")
+    return str(resultado)
+
+@tool
+def busqueda_web_general(search: str) -> str:
+    """Busca información GENERAL en internet.
+    USA ESTA HERRAMIENTA SOLO cuando la consulta NO sea sobre el IES Jándula directamente,
+    por ejemplo: normativa educativa de la Junta de Andalucía, legislación estatal (LOMLOE),
+    fechas de oposiciones, información de Séneca/iPasen, o temas educativos generales.
+    Para información específica del IES Jándula, usa 'busqueda_web_ies_jandula' en su lugar."""
+    print(f"\n🌍 [TOOL: busqueda_web_general] Query: {search}")
+    resultado = _tavily_general.invoke(search)
+    print(f"   [DEBUG] Resultados obtenidos (Tavily General): {str(resultado)[:200]}...")
+    return str(resultado)
+
+# Exportamos las funciones decoradas
+tool_busqueda_web_centro = busqueda_web_ies_jandula
+tool_busqueda_general = busqueda_web_general
