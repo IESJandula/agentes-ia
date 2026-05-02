@@ -17,7 +17,12 @@ from langchain_core.tools import tool
 _tavily_centro = TavilySearch(
     max_results=5,
     tavily_api_key=api_key,
-    include_domains=["blogsaverroes.juntadeandalucia.es"],
+    include_domains=[
+        "blogsaverroes.juntadeandalucia.es",  # Blog principal del centro (noticias, eventos)
+        "fp.iesjandula.es",                    # Web de FP (ciclos formativos, asignaturas)
+        "iesjandula.es",                       # Web institucional
+        "www.iesjandula.es"                    # Variante con www
+    ],
     name="busqueda_web_ies_jandula_raw",
 )
 
