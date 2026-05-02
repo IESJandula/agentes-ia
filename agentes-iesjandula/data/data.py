@@ -221,8 +221,8 @@ def procesar_y_añadir(file_path: str, perfil: str, nombre_original: str = None)
         return 0
 
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=700,
-        chunk_overlap=150,  # solapamiento aumentado para no perder contexto entre chunks
+        chunk_size=1500,
+        chunk_overlap=300,  # solapamiento aumentado para no perder contexto entre chunks
     )
     print("✂️ [DEBUG] Fragmentando texto...")
     chunks = text_splitter.split_text(texto)
