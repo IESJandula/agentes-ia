@@ -99,23 +99,25 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
         ultimo = estado["messages"][-1]
         texto  = ultimo.content if hasattr(ultimo, "content") else str(ultimo)
 
-        sys_clasificador = SystemMessage(content="""Eres el router del asistente del IES Jándula.
-Clasifica la consulta del usuario en UNA sola palabra:
+        sys_clasificador = SystemMessage(content="""Eres un sistema de enrutamiento estricto para el IES Jándula.
+Tu ÚNICA función es clasificar la consulta del usuario en una de estas dos categorías.
 
-  profesorado → planes internos (acogida, de centro, igualdad), protocolos (incendio, accidentes, evacuación), 
-                normativa interna (NOF, PEC, PGA, ROF, ROFE), CCP, actas, evaluaciones internas,
-                reuniones de departamento, protocolo docente, nombres de profesores, tutores o cargos directivos,
-                guardias, sustituciones, partes de ausencia, Séneca.
+CATEGORÍA 'profesorado':
+- Nombres de profesores, tutores, jefes de departamento o equipo directivo.
+- Documentación interna: planes (acogida, igualdad), protocolos (incendio, accidentes), normativa interna (NOF, PEC, ROF).
+- Gestión: guardias, Séneca, partes, sustituciones, reuniones.
 
-  publica     → noticias, eventos, actividades extraescolares, horarios generales del centro,
-                información para familias o alumnos, transporte, comedor, becas, matrículas,
-                oferta educativa, ciclos formativos, FP, grados, ESO, bachillerato,
-                secretaría, calendario escolar, información pública del centro, tiempo/clima.
+CATEGORÍA 'publica':
+- Noticias, eventos, calendario escolar, actividades extraescolares.
+- Trámites: secretaría, matrículas, becas, oferta educativa (ESO, Bachillerato, FP, ciclos).
+- Servicios: comedor, transporte, tiempo/clima.
 
-Responde ÚNICAMENTE con la palabra: profesorado o publica.
-Si la consulta trata sobre DOCUMENTACIÓN INTERNA del profesorado (planes, protocolos, normativa, guardias), elige: profesorado.
-Si la consulta trata sobre INFORMACIÓN PÚBLICA del centro (oferta, ciclos, noticias, eventos, matrículas), elige: publica.
-Ante la duda responde: publica""")
+REGLAS DE ORO:
+1. Responde ÚNICAMENTE con la palabra 'profesorado' o 'publica'.
+2. NO des explicaciones. NO pidas disculpas. NO digas que no tienes acceso.
+3. Si la consulta menciona un NOMBRE DE PERSONA o un CARGO, elige 'profesorado'.
+4. En caso de duda, elige 'publica'.
+5. TU RESPUESTA DEBE SER SOLO UNA PALABRA.""")
 
         respuesta = await llm_clasif.ainvoke([sys_clasificador, HumanMessage(content=texto)])
         raw = respuesta.content.strip().lower()
