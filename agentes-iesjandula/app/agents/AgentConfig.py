@@ -102,22 +102,32 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
         sys_clasificador = SystemMessage(content="""Eres un sistema de enrutamiento estricto para el IES Jándula.
 Tu ÚNICA función es clasificar la consulta del usuario en una de estas dos categorías.
 
-CATEGORÍA 'profesorado':
-- Nombres de profesores, tutores, jefes de departamento o equipo directivo.
-- Documentación interna: planes (acogida, igualdad), protocolos (incendio, accidentes), normativa interna (NOF, PEC, ROF).
-- Gestión: guardias, Séneca, partes, sustituciones, reuniones.
+CATEGORÍA 'profesorado' (información INTERNA del centro):
+- Nombres ESPECÍFICOS de profesores, tutores o jefes de departamento (ej: "¿quién es Juan García?").
+- Cargos del EQUIPO DIRECTIVO: directora, jefe de estudios, secretario/a (ej: "¿quién es la directora?").
+- Documentación interna: planes (acogida, igualdad), protocolos (incendio, accidentes), normativa interna (NOF, PEC, ROF, actas).
+- Gestión docente: guardias, Séneca, partes de incidencias, sustituciones, reuniones de departamento, horarios de profesores.
 
-CATEGORÍA 'publica':
-- Noticias, eventos, calendario escolar, actividades extraescolares.
-- Trámites: secretaría, matrículas, becas, oferta educativa (ESO, Bachillerato, FP, ciclos).
-- Servicios: comedor, transporte, tiempo/clima.
+CATEGORÍA 'publica' (información accesible en la web del centro):
+- TODO sobre ciclos formativos, FP, grados superiores/medios, ESO, Bachillerato (descripción, asignaturas, requisitos, salidas profesionales).
+- Ejemplos: "ciclo de desarrollo de aplicaciones web", "CFGS DAW", "FP de informática", "grado medio de gestión administrativa".
+- Noticias, eventos, calendario escolar, actividades extraescolares, clubes.
+- Trámites: secretaría, matrículas, becas, plazos de admisión, listas de admitidos.
+- Servicios: comedor, transporte, biblioteca, horarios generales.
+
+CASOS ESPECIALES - SIEMPRE SON 'publica':
+- Cualquier pregunta sobre ciclos formativos (FP, CFGS, CFGM) → 'publica'
+- "Dame información sobre..." + nombre de ciclo/curso → 'publica'
+- "Qué asignaturas tiene..." → 'publica'
+- "Requisitos para acceder a..." → 'publica'
 
 REGLAS DE ORO:
 1. Responde ÚNICAMENTE con la palabra 'profesorado' o 'publica'.
 2. NO des explicaciones. NO pidas disculpas. NO digas que no tienes acceso.
-3. Si la consulta menciona un NOMBRE DE PERSONA o un CARGO, elige 'profesorado'.
-4. En caso de duda, elige 'publica'.
-5. TU RESPUESTA DEBE SER SOLO UNA PALABRA.""")
+3. Si pregunta por el NOMBRE de la directora/jefe estudios/secretario → 'profesorado'.
+4. Si pregunta por INFORMACIÓN ACADÉMICA (ciclos, FP, asignaturas, cursos) → 'publica'.
+5. En caso de duda, elige 'publica'.
+6. TU RESPUESTA DEBE SER SOLO UNA PALABRA.""")
 
         respuesta = await llm_clasif.ainvoke([sys_clasificador, HumanMessage(content=texto)])
         raw = respuesta.content.strip().lower()
