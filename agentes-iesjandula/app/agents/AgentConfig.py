@@ -5,6 +5,7 @@ Grafo LangGraph con routing por perfil (alumnos / profesores).
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Annotated, Literal
 from typing_extensions import TypedDict
@@ -12,8 +13,51 @@ from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_ollama import ChatOllama
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage, ToolMessage
+import os
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helper: retry con backoff para rate-limit 429 de Gemini (free tier: 5 rpm)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _llm_invoke_con_retry(llm, mensajes, max_intentos: int = 4, espera_base: float = 20.0):
+    """
+    Llama a llm.ainvoke(mensajes) con reintentos automáticos ante 429 RESOURCE_EXHAUSTED.
+
+    Distingue dos tipos de límite:
+    - PerMinute → reintenta con backoff exponencial (espera_base * 2^i)
+    - PerDay    → falla inmediatamente con mensaje claro (reintentar en segundos no sirve)
+    """
+    import re as _re
+    for intento in range(1, max_intentos + 1):
+        try:
+            return await llm.ainvoke(mensajes)
+        except Exception as e:
+            err = str(e)
+            es_rate_limit = "429" in err or "RESOURCE_EXHAUSTED" in err
+
+            if not es_rate_limit:
+                raise  # error diferente al rate-limit
+
+            # ¿Es cuota diaria? No tiene sentido reintentar.
+            if "PerDay" in err or "per_day" in err.lower():
+                m = _re.search(r"model['\"]?\s*[:\s]+['\"]?([a-z0-9._-]+)", err)
+                modelo = m.group(1) if m else "desconocido"
+                raise RuntimeError(
+                    f"⛔ Cuota DIARIA agotada para el modelo '{modelo}'.\n"
+                    "El servicio estará disponible mañana (UTC 00:00).\n"
+                    "Considera activar facturación en https://ai.dev/rate-limit"
+                ) from e
+
+            # Cuota por minuto → reintentar con backoff
+            if intento < max_intentos:
+                wait = espera_base * (2 ** (intento - 1))
+                print(f"   ⏳ [LLM Rate-limit/min] Intento {intento}/{max_intentos}. Esperando {wait:.0f}s...")
+                await asyncio.sleep(wait)
+            else:
+                raise  # agotados los reintentos
 
 from app.tools import obtener_tools_publicas, obtener_tools_profesorado
 from .prompts.prompt_manager import PROMPTS, BEHAVIOR_PUBLIC, BEHAVIOR_TEACHER, REGLAS_VOZ
@@ -48,14 +92,39 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
     PROMPT_PROF = PROMPTS[perfil] + "\n\n" + BEHAVIOR_TEACHER + _voz_suffix
 
     # ── 3. LLMs ─────────────────────────────────────────────────────────────
-    _base_llm  = ChatOllama(model="llama3.1:8b", temperature=0.4)
+    # Modelo configurable por variable de entorno para facilitar el cambio.
+    # Opciones recomendadas (AI Studio free tier, de menor a mayor cuota):
+    #   gemini-3-flash-preview  →  20 req/día  (evitar)
+    #   gemini-2.0-flash-lite   →  200 req/día
+    #   gemini-1.5-flash        →  1500 req/día ← recomendado para desarrollo
+    if not os.getenv("GOOGLE_API_KEY"):
+        raise ValueError("⚠️ GOOGLE_API_KEY no está configurada en las variables de entorno")
+
+    _model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    print(f"   🤖 Usando modelo LLM: {_model_name}")
+    _base_llm  = ChatGoogleGenerativeAI(
+        model=_model_name,
+        temperature=0.4,
+        max_retries=3,
+    )
     llm_clasif = _base_llm                                      # sin tools
-    llm_pub    = _base_llm.bind_tools(tools_pub)
+    llm_pub    = _base_llm.bind_tools(tools_pub) if tools_pub else _base_llm
     llm_prof   = _base_llm.bind_tools(tools_prof) if tools_prof else _base_llm
 
     # ─────────────────────────────────────────────────────────────────────────
     # Nodos
     # ─────────────────────────────────────────────────────────────────────────
+
+    def _extract_text(content) -> str:
+        """Extrae el texto de un objeto content que puede ser str o list (multimodal)."""
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return " ".join(
+                part.get("text", "") if isinstance(part, dict) else str(part) 
+                for part in content
+            )
+        return str(content)
 
     # ── Helper: detectar saludos simples ───────────────────────────────────
     _SALUDOS = [
@@ -66,6 +135,7 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
 
     def _es_saludo(texto: str) -> bool:
         """Detecta si el texto es un saludo o respuesta simple que no requiere tool."""
+        if not texto: return False
         limpio = texto.strip().lower().rstrip(".,!?¿¡")
         # Coincidencia exacta o inicio de saludo
         return any(limpio == s or limpio.startswith(s + " ") for s in _SALUDOS) and len(limpio) < 40
@@ -74,7 +144,7 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
     def _ultimo_mensaje_usuario(estado: Estado) -> str | None:
         for m in reversed(estado["messages"]):
             if isinstance(m, HumanMessage):
-                return m.content
+                return _extract_text(m.content)
         return None
 
     # ── Helper: reconstruir contexto de ToolMessages ─────────────────────────
@@ -129,8 +199,8 @@ REGLAS DE ORO:
 5. En caso de duda, elige 'publica'.
 6. TU RESPUESTA DEBE SER SOLO UNA PALABRA.""")
 
-        respuesta = await llm_clasif.ainvoke([sys_clasificador, HumanMessage(content=texto)])
-        raw = respuesta.content.strip().lower()
+        respuesta = await _llm_invoke_con_retry(llm_clasif, [sys_clasificador, HumanMessage(content=texto)])
+        raw = _extract_text(respuesta.content).strip().lower()
 
         # Detectar "publica" primero (incluye variantes con/sin tilde)
         # porque la palabra "profesorado" contiene "profesor" como substring
@@ -153,7 +223,7 @@ REGLAS DE ORO:
 
         tool_context = _build_tool_context(estado)
         system = SystemMessage(content=PROMPT_PUB + tool_context)
-        respuesta = await llm_pub.ainvoke([system] + mensajes)
+        respuesta = await _llm_invoke_con_retry(llm_pub, [system] + mensajes)
 
         # ── GUARDRAIL: forzar búsqueda si el LLM no llamó herramientas y no hay contexto ──
         has_context = any(isinstance(m, ToolMessage) for m in mensajes[-3:])
@@ -181,7 +251,7 @@ REGLAS DE ORO:
 
         tool_context = _build_tool_context(estado)
         system = SystemMessage(content=PROMPT_PROF + tool_context)
-        respuesta = await llm_prof.ainvoke([system] + mensajes)
+        respuesta = await _llm_invoke_con_retry(llm_prof, [system] + mensajes)
 
         # ── GUARDRAIL: forzar búsqueda si el LLM no llamó herramientas y no hay contexto ──
         has_context = any(isinstance(m, ToolMessage) for m in mensajes[-3:])

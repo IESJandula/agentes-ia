@@ -1,35 +1,38 @@
-# 1. Usamos Python 3.12 (actualmente más estable para librerías de IA que 3.13)
+# 1. Usamos Python 3.12 slim (más ligero)
 FROM python:3.12-slim
 
 # 2. Configuraciones de entorno
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PORT=8010
 WORKDIR /app
 
-# 3. Instalamos dependencias del sistema (FFmpeg, Libs de imagen, etc.)
-RUN apt-get update && apt-get install -y \
+# 3. Instalamos dependencias del sistema MÍNIMAS
+# Solo FFmpeg para procesamiento de audio/vídeo si es necesario
+# Eliminadas librerías de imagen pesadas ya que no usamos Ollama localmente
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libffi-dev \
     libssl-dev \
-    git \
-    ffmpeg \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # 4. Instalamos las dependencias de Python
-RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. INSTALACIÓN CRÍTICA: Playwright y sus dependencias de sistema
+# 5. Playwright para navegación web
 RUN playwright install --with-deps chromium
 
 # 6. Copiamos el resto de la aplicación
 COPY . .
 
-# 7. Exponemos el puerto
-EXPOSE 8000
+# 7. Exponemos el puerto 8010 (no 8000, porque está ocupado en Coolify)
+EXPOSE 8010
 
-# 8. Comando de ejecución (corregido a main:app)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 8. Health check (opcional pero recomendado en Coolify)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8010/api', timeout=5)" || exit 1
+
+# 9. Comando de ejecución
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010"]

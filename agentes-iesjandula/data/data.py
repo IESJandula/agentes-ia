@@ -1,18 +1,66 @@
 import gc
 import os
+import time
 import uuid
 
 from dotenv import load_dotenv
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 import chromadb
-from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
+from chromadb.api.types import EmbeddingFunction
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from pypdf import PdfReader
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 
 load_dotenv()
+
+
+class GeminiEmbeddingFunction(EmbeddingFunction):
+    def __init__(self, api_key: str, model: str = "gemini-embedding-2"):
+        self.api_key = api_key
+        self.model = model
+        self.embedding_client = GoogleGenerativeAIEmbeddings(
+            model=self.model,
+            api_key=self.api_key,
+        )
+
+    def __call__(self, input):
+        if isinstance(input, str):
+            input = [input]
+        return self.embed_documents(list(input))
+
+    def embed_documents(self, texts):
+        return self.embedding_client.embed_documents(texts)
+
+    def embed_query(self, text=None, *, input=None, **kwargs):
+        # ChromaDB puede llamar embed_query(input=...) como kwarg
+        query = text if text is not None else input
+        return self.embedding_client.embed_query(query)
+
+    @staticmethod
+    def name() -> str:
+        return "gemini"
+
+    @staticmethod
+    def build_from_config(config: dict) -> "GeminiEmbeddingFunction":
+        return GeminiEmbeddingFunction(
+            api_key=config["api_key"],
+            model=config.get("model", "gemini-embedding-2"),
+        )
+
+    def get_config(self) -> dict:
+        return {
+            "api_key": self.api_key,
+            "model": self.model,
+        }
+
+    def default_space(self):
+        return "cosine"
+
+    def supported_spaces(self):
+        return ["cosine", "l2", "ip"]
 
 # ---------------------------------------------------------------------------
 # Configuración global
@@ -26,16 +74,25 @@ RUTA_PDF_DEFAULT = os.path.join(current_dir, "guia-profesorado.pdf")
 #client = chromadb.PersistentClient(path=persist_db_path)
 
 chroma_host = os.getenv("CHROMA_SERVER_HOST", "localhost")
-chroma_port = os.getenv("CHROMA_SERVER_HTTP_PORT", "8000")
+chroma_port = int(os.getenv("CHROMA_SERVER_HTTP_PORT", "8000"))
 
-client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
+try:
+    client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
+except Exception as e:
+    raise ConnectionError(
+        f"No se pudo conectar al servidor Chroma en {chroma_host}:{chroma_port}. "
+        "Asegúrate de que el servicio ChromaDB está corriendo y que CHROMA_SERVER_HOST/CHROMA_SERVER_HTTP_PORT están bien configurados. "
+        f"Error original: {e}"
+    ) from e
 
-# Función de embedding compartida (permite configurar URL por entorno para Docker)
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+# Embeddings de Gemini: API nativa integrada en LangChain
+# Requiere GENAI_API_KEY en variables de entorno
+if not os.getenv("GOOGLE_API_KEY"):
+    raise ValueError("⚠️ GOOGLE_API_KEY no está configurada en las variables de entorno")
 
-embedding_fn = OllamaEmbeddingFunction(
-    model_name="qwen3-embedding:4b",
-    url=OLLAMA_URL,
+embedding_fn = GeminiEmbeddingFunction(
+    api_key=os.getenv("GOOGLE_API_KEY"),
+    model="models/gemini-embedding-2",
 )
 
 # Conversor Docling (singleton de módulo)
@@ -54,7 +111,8 @@ converter = DocumentConverter(
 )
 
 # Número de páginas por lote para Docling (evita std::bad_alloc en PDFs grandes)
-DOCLING_PAGE_BATCH_SIZE = 8
+# Reducido a 4 para ser más conservador con la memoria
+DOCLING_PAGE_BATCH_SIZE = 4
 
 # Colecciones — se crean si no existen
 # Nombres internos de ChromaDB
@@ -84,6 +142,29 @@ print(f"📊 [DATABASE] Documentos en Alumnos:    {alumnos_col.count()}")
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
+
+def query_coleccion(coleccion, query: str, n_results: int = 8, include=None):
+    """
+    Realiza una búsqueda semántica en una colección ChromaDB evitando el error
+    'float object has no attribute tolist' que ocurre cuando ChromaDB intenta
+    procesar internamente el resultado de GoogleGenerativeAIEmbeddings.
+
+    Solución: calculamos el embedding nosotros y lo pasamos como query_embeddings
+    (List[List[float]]) en lugar de usar query_texts (que delega en ChromaDB).
+    """
+    if include is None:
+        include = ["documents", "metadatas", "distances"]
+
+    # Calcular embedding manualmente → List[float]
+    vector: list[float] = embedding_fn.embed_query(query)
+
+    # ChromaDB espera query_embeddings: List[List[float]]
+    return coleccion.query(
+        query_embeddings=[vector],
+        n_results=n_results,
+        include=include,
+    )
+
 
 def obtener_coleccion(perfil: str):
     """
@@ -123,7 +204,9 @@ def _extraer_texto_docling_por_lotes(file_path: str, total_pages: int) -> str:
         end = min(start + batch - 1, total_pages)
         lote_num = (start // batch) + 1
         print(f"   📖 Lote {lote_num}: páginas {start}–{end} ...", end=" ")
+        
         try:
+            # Intentar procesar el lote completo
             result = converter.convert(file_path, page_range=(start, end))
             texto_lote = result.document.export_to_markdown()
             if texto_lote and texto_lote.strip():
@@ -131,11 +214,25 @@ def _extraer_texto_docling_por_lotes(file_path: str, total_pages: int) -> str:
                 lotes_ok += 1
                 print("✅")
             else:
-                lotes_fail += 1
                 print("⚠️ vacío")
         except Exception as e:
-            lotes_fail += 1
-            print(f"❌ {e}")
+            # Si el lote falla (posible std::bad_alloc), reintentar página por página
+            print(f"❌ Error en lote ({e}). Reintentando página a página...")
+            for p in range(start, end + 1):
+                print(f"      📄 Página {p} ...", end=" ")
+                try:
+                    res_p = converter.convert(file_path, page_range=(p, p))
+                    txt_p = res_p.document.export_to_markdown()
+                    if txt_p.strip():
+                        partes_md.append(txt_p)
+                        print("✅")
+                    else:
+                        print("⚠️ vacía")
+                except Exception as ep:
+                    print(f"❌ Fallo crítico: {ep}")
+                    lotes_fail += 1
+                finally:
+                    gc.collect() # Limpiar después de cada página en modo fallback
         finally:
             # Liberar memoria entre lotes
             gc.collect()
@@ -253,19 +350,45 @@ def procesar_y_añadir(file_path: str, perfil: str, nombre_original: str = None)
     coleccion = obtener_coleccion(perfil)
 
     BATCH_SIZE = 20
+    MAX_RETRIES = 3
+    PAUSE_ENTRE_LOTES = 5   # segundos entre lotes para respetar rate-limit
     total = len(chunks)
-    print(f"📤 [DEBUG] Subiendo {total} fragmentos en lotes de {BATCH_SIZE}...")
+    num_lotes = -(-total // BATCH_SIZE)
+    print(f"📤 [DEBUG] Subiendo {total} fragmentos en {num_lotes} lotes de {BATCH_SIZE}...")
+    print(f"   ⏱️  Pausa de {PAUSE_ENTRE_LOTES}s entre lotes (rate-limit: 100 req/min free tier)")
     try:
         for i in range(0, total, BATCH_SIZE):
             batch_docs  = documents[i:i+BATCH_SIZE]
             batch_meta  = metadatas[i:i+BATCH_SIZE]
             batch_ids   = ids[i:i+BATCH_SIZE]
-            coleccion.add(
-                documents=batch_docs,
-                metadatas=batch_meta,
-                ids=batch_ids,
-            )
-            print(f"   ✅ Lote {i//BATCH_SIZE + 1}/{-(-total//BATCH_SIZE)} insertado ({len(batch_docs)} chunks)")
+            lote_actual = i // BATCH_SIZE + 1
+
+            # Retry con backoff exponencial para manejar 429 RESOURCE_EXHAUSTED
+            for intento in range(1, MAX_RETRIES + 1):
+                try:
+                    coleccion.add(
+                        documents=batch_docs,
+                        metadatas=batch_meta,
+                        ids=batch_ids,
+                    )
+                    print(f"   ✅ Lote {lote_actual}/{num_lotes} insertado ({len(batch_docs)} chunks)")
+                    break  # éxito, salir del bucle de reintentos
+                except Exception as batch_err:
+                    err_str = str(batch_err)
+                    if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                        wait_time = PAUSE_ENTRE_LOTES * (2 ** intento)  # backoff exponencial
+                        print(f"   ⏳ Rate-limit alcanzado (lote {lote_actual}, intento {intento}/{MAX_RETRIES}). "
+                              f"Esperando {wait_time}s...")
+                        time.sleep(wait_time)
+                        if intento == MAX_RETRIES:
+                            print(f"❌ [DEBUG] Lote {lote_actual} falló tras {MAX_RETRIES} reintentos.")
+                            raise
+                    else:
+                        raise  # error no recuperable
+
+            # Pausa entre lotes para no superar el rate-limit
+            if i + BATCH_SIZE < total:
+                time.sleep(PAUSE_ENTRE_LOTES)
     except Exception as e:
         print(f"❌ [DEBUG] Error en la inserción: {e}")
         raise
@@ -374,11 +497,42 @@ def inicializar_bases_datos(pdf_profes: str = None, pdf_alumnos: str = None):
 
         try:
             num_elementos = col.count()
+
+            # Detectar carga incompleta: buscar metadato "total_chunks" en el primer doc
+            carga_completa = True
+            if num_elementos > 0:
+                muestra = col.get(limit=1, include=["metadatas"])
+                if muestra and muestra.get("metadatas"):
+                    total_esperado = muestra["metadatas"][0].get("total_chunks", num_elementos)
+                    if num_elementos < total_esperado:
+                        print(f"⚠️ {label} incompleta ({num_elementos}/{total_esperado} chunks). Reprocesando...")
+                        client.delete_collection(col.name)
+                        # Recrear la colección vacía
+                        if perfil == "profesores":
+                            globals()["profesores_col"] = client.get_or_create_collection(
+                                name=col.name, embedding_function=embedding_fn
+                            )
+                            col = globals()["profesores_col"]
+                        else:
+                            globals()["alumnos_col"] = client.get_or_create_collection(
+                                name=col.name, embedding_function=embedding_fn
+                            )
+                            col = globals()["alumnos_col"]
+                        num_elementos = 0
+                        carga_completa = False
+
             if num_elementos == 0:
                 print(f"🆕 {label} vacía. Procesando...")
                 n = procesar_y_añadir(path, perfil)
                 print(f"✅ {label} inicializada con {n} fragmentos.")
-            else:
-                print(f"ℹ️ {label} ya tiene {num_elementos} fragmentos. Saltando.")
+            elif carga_completa:
+                print(f"ℹ️ {label} ya tiene {num_elementos} fragmentos completos. Saltando.")
         except Exception as e:
+            # Si falla durante la carga, borrar la colección parcial para permitir
+            # un reintento limpio en el próximo arranque
             print(f"❌ ERROR inicializando {label}: {e}")
+            try:
+                client.delete_collection(col.name)
+                print(f"🗑️ Colección parcial '{col.name}' borrada para reintento limpio.")
+            except Exception:
+                pass

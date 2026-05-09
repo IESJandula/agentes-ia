@@ -30,6 +30,9 @@ async def lifespan(app: FastAPI):
     print("INICIANDO APLICACIÓN DEL AGENTE MULTIMODAL IES JÁNDULA")
     print("="*60)
     try:
+        print("📊 Cargando/Verificando Bases de Datos RAG...")
+        inicializar_bases_datos()
+
         print("🚀 Inicializando Cerebro del Agente (Modo Texto/Profesores)...")
         await agents_service.procesar_chat("Hola", perfil="profesores") 
         print("✅ Sistema listo para recibir consultas.")
