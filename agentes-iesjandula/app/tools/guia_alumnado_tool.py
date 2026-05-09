@@ -1,5 +1,5 @@
 from langchain_core.tools import tool
-from data.data import alumnos_col
+from data.data import alumnos_col, query_coleccion
 
 
 @tool
@@ -26,10 +26,11 @@ def guia_alumnado(search: str) -> str:
     """
     print(f"\n📚 [TOOL: guia_alumnado] Query: {search}")
     
-    resultados = alumnos_col.query(
-        query_texts=[search],
+    resultados = query_coleccion(
+        alumnos_col,
+        query=search,
         n_results=8,
-        include=["documents", "distances"]
+        include=["documents", "distances"],
     )
     
     docs = resultados["documents"][0] if resultados["documents"] else []
