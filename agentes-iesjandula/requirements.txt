@@ -30,3 +30,4 @@ docling
 
 # --- Base de Datos / Sistema ---
 # pysqlite3-binary (solo necesario en Linux/Coolify)
+pysqlite3-binary
