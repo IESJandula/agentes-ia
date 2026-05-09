@@ -20,7 +20,13 @@ class AgenteJandula:
 
         config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 15}
         resultado = await self.grafo.ainvoke({"messages": [("user", texto_usuario)]}, config)
-        respuesta_texto = resultado["messages"][-1].content
+        
+        # Extraer texto de forma segura (soporta str y list/multimodal)
+        raw_content = resultado["messages"][-1].content
+        if isinstance(raw_content, list):
+            respuesta_texto = " ".join(part.get("text", "") if isinstance(part, dict) else str(part) for part in raw_content)
+        else:
+            respuesta_texto = str(raw_content)
 
         if self.modo == "voz":
             return self.motor_voz.hablar(respuesta_texto)

@@ -2,15 +2,14 @@
 fastapi
 uvicorn
 python-dotenv
-gradio
 pydantic
+gunicorn
 
 # --- Framework de IA y Orquestación ---
 langchain
 langchain-core
 langchain-community
 langgraph
-langchain-ollama
 langchain-google-genai
 
 # --- Herramientas de Búsqueda y Navegación ---
@@ -22,26 +21,12 @@ rapidfuzz
 
 # --- Base de Datos Vectorial (RAG) ---
 langchain-chroma
-langchain-huggingface
-sentence-transformers
+chromadb
 pypdf
 langchain-text-splitters
 
-# --- Utilidades ---
-typing-extensions
-
-# --- Voz ---
-whisper
-gtts
-
-grandalf
-soundfile
-kokoro-onnx 
-soundfile
+# --- Procesamiento de PDFs ---
 docling
 
-chromadb
-
 # --- Base de Datos / Sistema ---
-pysqlite3-binary
-gunicorn
+# pysqlite3-binary (solo necesario en Linux/Coolify)
