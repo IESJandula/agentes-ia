@@ -41,7 +41,8 @@ def guia_profesorado(search: str) -> str:
 
     print(f"   [DEBUG] Se encontraron {len(docs)} fragmentos.")
     for i, (d, dist) in enumerate(zip(docs[:5], distancias[:5])):
-        print(f"   [DEBUG] Fragmento {i+1} (dist: {dist:.4f}): {d[:100].replace('\n', ' ')}...")
+        snippet = d[:100].replace('\n', ' ')
+        print(f"   [DEBUG] Fragmento {i+1} (dist: {dist:.4f}): {snippet}...")
 
     if not docs:
         return "No se encontró información en la guía del profesorado para esa consulta."
