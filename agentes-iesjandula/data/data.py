@@ -76,13 +76,23 @@ RUTA_PDF_DEFAULT = os.path.join(current_dir, "guia-profesorado.pdf")
 chroma_host = os.getenv("CHROMA_SERVER_HOST", "localhost")
 chroma_port = int(os.getenv("CHROMA_SERVER_HTTP_PORT", "8000"))
 
-try:
-    client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
-except Exception as e:
-    raise ConnectionError(
-        f"No se pudo conectar al servidor Chroma en {chroma_host}:{chroma_port}. "
-        "Asegúrate de que el servicio ChromaDB está corriendo y que CHROMA_SERVER_HOST/CHROMA_SERVER_HTTP_PORT están bien configurados. "
-        f"Error original: {e}"
+client = None
+max_intentos_db = 5
+for i in range(max_intentos_db):
+    try:
+        print(f"📡 [DATABASE] Intentando conectar a ChromaDB en {chroma_host}:{chroma_port} (intento {i+1}/{max_intentos_db})...")
+        client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
+        # Probar conexión real
+        client.heartbeat()
+        print("✅ [DATABASE] Conexión exitosa.")
+        break
+    except Exception as e:
+        if i == max_intentos_db - 1:
+            raise ConnectionError(
+                f"❌ No se pudo conectar al servidor Chroma en {chroma_host}:{chroma_port} tras {max_intentos_db} intentos. "
+                f"Error: {e}"
+            )
+        time.sleep(2)
     ) from e
 
 # Embeddings de Gemini: API nativa integrada en LangChain
