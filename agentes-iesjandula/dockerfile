@@ -27,7 +27,10 @@ RUN playwright install --with-deps chromium
 # 6. Copiamos el resto de la aplicación
 COPY . .
 
-# 7. Exponemos el puerto 8010 (no 8000, porque está ocupado en Coolify)
+# 7. Volumen local persistente para la base de datos Chroma
+VOLUME /app/data/chroma_db_v3
+
+# 8. Exponemos el puerto 8010 (no 8000, porque está ocupado en Coolify)
 EXPOSE 8010
 
 # 8. Health check (opcional pero recomendado en Coolify)
