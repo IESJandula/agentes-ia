@@ -93,7 +93,6 @@ for i in range(max_intentos_db):
                 f"Error: {e}"
             )
         time.sleep(2)
-    ) from e
 
 # Embeddings de Gemini: API nativa integrada en LangChain
 # Requiere GENAI_API_KEY en variables de entorno
