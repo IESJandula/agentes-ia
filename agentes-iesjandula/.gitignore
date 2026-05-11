@@ -41,6 +41,7 @@ agente_env/
 app/data/chroma_db/
 chroma_db/
 data/chroma_db/
+data/chroma_db_v3/
 *.local.storage
 
 # --- Playwright y Navegadores ---

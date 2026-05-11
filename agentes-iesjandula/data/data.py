@@ -71,28 +71,36 @@ persist_db_path = os.path.join(current_dir, "chroma_db_v3")
 RUTA_PDF_DEFAULT = os.path.join(current_dir, "guia-profesorado.pdf")
 
 # Cliente ChromaDB persistente (singleton de módulo)
-#client = chromadb.PersistentClient(path=persist_db_path)
-
+# Nota: por defecto el proyecto despliega Chroma localmente sin servicio HTTP externo.
 chroma_host = os.getenv("CHROMA_SERVER_HOST", "localhost")
 chroma_port = int(os.getenv("CHROMA_SERVER_HTTP_PORT", "8000"))
+chroma_use_http = os.getenv("CHROMA_USE_HTTP", "false").strip().lower() in ("1", "true", "yes", "on")
+chroma_persist_path = os.getenv("CHROMA_PERSIST_PATH", persist_db_path)
 
 client = None
 max_intentos_db = 5
-for i in range(max_intentos_db):
-    try:
-        print(f"📡 [DATABASE] Intentando conectar a ChromaDB en {chroma_host}:{chroma_port} (intento {i+1}/{max_intentos_db})...")
-        client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
-        # Probar conexión real
-        client.heartbeat()
-        print("✅ [DATABASE] Conexión exitosa.")
-        break
-    except Exception as e:
-        if i == max_intentos_db - 1:
-            raise ConnectionError(
-                f"❌ No se pudo conectar al servidor Chroma en {chroma_host}:{chroma_port} tras {max_intentos_db} intentos. "
-                f"Error: {e}"
-            )
-        time.sleep(2)
+
+if chroma_use_http:
+    for i in range(max_intentos_db):
+        try:
+            print(f"📡 [DATABASE] Intentando conectar a ChromaDB en {chroma_host}:{chroma_port} (intento {i+1}/{max_intentos_db})...")
+            client = chromadb.HttpClient(host=chroma_host, port=chroma_port)
+            # Probar conexión real
+            client.heartbeat()
+            print("✅ [DATABASE] Conexión HTTP a ChromaDB exitosa.")
+            break
+        except Exception as e:
+            if i == max_intentos_db - 1:
+                raise ConnectionError(
+                    f"❌ No se pudo conectar al servidor Chroma en {chroma_host}:{chroma_port} tras {max_intentos_db} intentos. "
+                    f"Error: {e}"
+                )
+            time.sleep(2)
+else:
+    os.makedirs(chroma_persist_path, exist_ok=True)
+    print(f"📡 [DATABASE] Usando ChromaDB local persistente en {chroma_persist_path}")
+    client = chromadb.PersistentClient(path=chroma_persist_path)
+    print("✅ [DATABASE] ChromaDB local persistente inicializado.")
 
 # Embeddings de Gemini: API nativa integrada en LangChain
 # Requiere GENAI_API_KEY en variables de entorno
