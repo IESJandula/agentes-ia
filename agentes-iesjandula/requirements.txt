@@ -28,6 +28,13 @@ langchain-text-splitters
 # --- Procesamiento de PDFs ---
 docling
 
+# --- Audio y Voz (STT/TTS) ---
+soundfile
+torch
+numpy
+transformers
+kokoro-onnx
+
 # --- Base de Datos / Sistema ---
 # pysqlite3-binary (solo necesario en Linux/Coolify)
 pysqlite3-binary
