@@ -4,6 +4,7 @@ uvicorn
 python-dotenv
 pydantic
 gunicorn
+python-multipart
 
 # --- Framework de IA y Orquestación ---
 langchain
