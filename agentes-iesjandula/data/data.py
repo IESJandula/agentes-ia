@@ -142,14 +142,40 @@ _PERFIL_A_COLECCION = {
     "alumnos":    _COLECCION_ALUMNOS,
 }
 
-profesores_col = client.get_or_create_collection(
-    name=_COLECCION_PROFESORES,
-    embedding_function=embedding_fn,
-)
-alumnos_col = client.get_or_create_collection(
-    name=_COLECCION_ALUMNOS,
-    embedding_function=embedding_fn,
-)
+def _crear_o_recrear_coleccion(nombre_coleccion: str, embedding_fn):
+    """
+    Crea o recrea una colección ChromaDB, manejando conflictos de función de embedding.
+    Si hay conflicto (ej: colección con Ollama y queremos Gemini), elimina y recrea.
+    """
+    try:
+        # Intentar crear/obtener la colección con la nueva función de embedding
+        col = client.get_or_create_collection(
+            name=nombre_coleccion,
+            embedding_function=embedding_fn,
+        )
+        print(f"✅ [DATABASE] Colección '{nombre_coleccion}' lista.")
+        return col
+    except ValueError as e:
+        if "embedding function already exists" in str(e).lower():
+            print(f"⚠️ [DATABASE] Conflicto de función de embedding en '{nombre_coleccion}'. Eliminando y recreando...")
+            try:
+                client.delete_collection(nombre_coleccion)
+                print(f"🗑️ [DATABASE] Colección '{nombre_coleccion}' eliminada.")
+            except Exception as del_e:
+                print(f"⚠️ [DATABASE] Error eliminando colección '{nombre_coleccion}': {del_e}")
+            
+            # Recrear con la nueva función de embedding
+            col = client.get_or_create_collection(
+                name=nombre_coleccion,
+                embedding_function=embedding_fn,
+            )
+            print(f"✅ [DATABASE] Colección '{nombre_coleccion}' recreada con nueva función de embedding.")
+            return col
+        else:
+            raise  # Re-lanzar si no es el error esperado
+
+profesores_col = _crear_o_recrear_coleccion(_COLECCION_PROFESORES, embedding_fn)
+alumnos_col = _crear_o_recrear_coleccion(_COLECCION_ALUMNOS, embedding_fn)
 
 # Debug: Mostrar conteo al iniciar
 print(f"📊 [DATABASE] Versión: {os.path.basename(persist_db_path)}")
