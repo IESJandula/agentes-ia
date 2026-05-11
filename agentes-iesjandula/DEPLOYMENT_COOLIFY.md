@@ -106,24 +106,37 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010"]
 
 ## 🔌 Conectividad entre Contenedores (Coolify)
 
-### Escenario 1: ChromaDB en el mismo Coolify
+### Escenario 1: ChromaDB local persistente dentro del contenedor
 ```env
-CHROMA_SERVER_HOST=localhost
+CHROMA_USE_HTTP=false
+CHROMA_PERSIST_PATH=/app/data/chroma_db_v3
+```
+
+Este modo usa almacenamiento local dentro del contenedor y evita las conexiones HTTP externas.
+No necesitas crear un servicio adicional en Coolify, solo monta un volumen persistente en la ruta del contenedor.
+
+En Coolify, en el proyecto de la app, agrega un persistent storage con la ruta:
+
+- Mount path: `/app/data/chroma_db_v3`
+
+Esto hace que la base de datos se mantenga entre reinicios y despliegues sin crear otro servicio.
+
+**Escenario alternativo**: si quieres usar un servicio Chroma externo, activa HTTP y define host/puerto:
+```env
+CHROMA_USE_HTTP=true
+CHROMA_SERVER_HOST=chroma
 CHROMA_SERVER_HTTP_PORT=8000
 ```
 
 **Problema potencial**: "localhost" dentro del contenedor se refiere a SÍ MISMO.
 
-**Solución**: Usa el nombre del servicio ChromaDB en Coolify:
+**Solución remota**: usa el nombre del servicio ChromaDB en Coolify:
 ```env
-# Si el servicio se llama "chroma"
+CHROMA_USE_HTTP=true
 CHROMA_SERVER_HOST=chroma
 CHROMA_SERVER_HTTP_PORT=8000
-
-# Si está en otra máquina
-CHROMA_SERVER_HOST=chroma.coolify.local
-CHROMA_SERVER_HTTP_PORT=8000
 ```
+
 
 ### Escenario 2: ChromaDB en otra máquina
 ```env
