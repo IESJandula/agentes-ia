@@ -8,48 +8,29 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #f5f4f1;
-      --surface:   #ffffff;
-      --surface2:  #f0efe9;
-      --border:    rgba(0,0,0,0.10);
-      --border-md: rgba(0,0,0,0.18);
-      --text:      #1a1a18;
-      --text-sec:  #5f5e5a;
-      --text-hint: #888780;
-      --accent:    #534AB7;
-      --accent-bg: #EEEDFE;
-      --accent-t:  #3C3489;
-      --danger:    #A32D2D;
-      --danger-bg: #FCEBEB;
-      --success:   #0F6E56;
-      --success-bg:#E1F5EE;
-      --radius:    10px;
-      --radius-lg: 14px;
-      --shadow:    0 1px 3px rgba(0,0,0,0.08);
-    }
-
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg:        #1c1c1a;
-        --surface:   #252523;
-        --surface2:  #2e2e2b;
-        --border:    rgba(255,255,255,0.10);
-        --border-md: rgba(255,255,255,0.18);
-        --text:      #edecea;
-        --text-sec:  #b4b2a9;
-        --text-hint: #888780;
-        --accent:    #AFA9EC;
-        --accent-bg: #26215C;
-        --accent-t:  #CECBF6;
-        --danger:    #F09595;
-        --danger-bg: #501313;
-        --success:   #5DCAA5;
-        --success-bg:#04342C;
-      }
+      --bg:        #0d0f0e; /* Negro profundo gamer */
+      --surface:   #161a17; /* Gris oscuro superficie */
+      --surface2:  #1f2420; /* Gris medio */
+      --border:    rgba(0, 255, 136, 0.1);
+      --border-md: rgba(0, 255, 136, 0.25);
+      --text:      #e0f0e5;
+      --text-sec:  #a0b0a5;
+      --text-hint: #607065;
+      --accent:    #00ff88; /* Verde Eléctrico Gamer */
+      --accent-bg: rgba(0, 255, 136, 0.1);
+      --accent-t:  #00ff88;
+      --danger:    #ff4d4d;
+      --danger-bg: #2a1010;
+      --success:   #00ff88;
+      --success-bg: #0a251a;
+      --radius:    8px;
+      --radius-lg: 16px;
+      --shadow:    0 8px 32px rgba(0,0,0,0.4);
+      --glow:      0 0 15px rgba(0, 255, 136, 0.3);
     }
 
     body {
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
       background: var(--bg);
       color: var(--text);
       font-size: 15px;
@@ -78,13 +59,13 @@
     }
     .logo-icon {
       width: 32px; height: 32px;
-      background: var(--accent-bg);
+      background: var(--accent);
       border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
     }
-    .logo-icon svg { width: 18px; height: 18px; fill: var(--accent); }
-    .logo-name { font-size: 15px; font-weight: 500; color: var(--text); }
-    .logo-sub  { font-size: 12px; color: var(--text-hint); margin-left: 4px; }
+    .logo-icon svg { width: 18px; height: 18px; fill: #ffffff; }
+    .logo-name { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+    .logo-sub  { font-size: 12px; color: var(--text-hint); margin-left: 4px; font-weight: 400; }
 
     /* ── Tab nav ── */
     nav {
@@ -178,8 +159,8 @@
       font-size: 12px; font-weight: 500;
       flex-shrink: 0;
     }
-    .avatar.bot  { background: var(--accent-bg); color: var(--accent-t); }
-    .avatar.user { background: var(--surface2); color: var(--text-sec); }
+    .avatar.bot  { background: var(--accent); color: #000; box-shadow: var(--glow); font-weight: 700; }
+    .avatar.user { background: var(--surface2); color: var(--text-sec); border: 1px solid var(--border); }
 
     .bubble {
       padding: 10px 14px;
@@ -191,15 +172,18 @@
     }
     .msg.user .bubble {
       background: var(--accent);
-      color: #fff;
+      color: #000;
+      font-weight: 500;
       border-bottom-right-radius: 4px;
-      white-space: pre-wrap;  /* conservar saltos en mensajes del usuario */
+      box-shadow: var(--glow);
+      white-space: pre-wrap;
     }
     .msg.bot .bubble {
       background: var(--surface);
-      border: 0.5px solid var(--border);
+      border: 1px solid var(--border);
       color: var(--text);
       border-bottom-left-radius: 4px;
+      box-shadow: var(--shadow);
     }
     /* Markdown dentro de burbujas del bot */
     .msg.bot .bubble p  { margin: 0 0 6px; }
@@ -209,11 +193,13 @@
     .msg.bot .bubble strong { font-weight: 600; }
     .msg.bot .bubble em { font-style: italic; }
     .msg.bot .bubble code {
-      background: var(--surface2);
-      border-radius: 3px;
-      padding: 1px 5px;
-      font-size: 12px;
-      font-family: monospace;
+      background: #000;
+      color: var(--accent);
+      border: 1px solid var(--border-md);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 13px;
+      font-family: 'Fira Code', monospace;
     }
 
     .typing { display: flex; gap: 4px; align-items: center; padding: 12px 14px; }
@@ -307,7 +293,7 @@
       font-size: 13px; color: var(--accent-t); font-weight: 500;
       padding: 2px 8px; border-radius: 6px;
     }
-    .audio-banner button:hover { background: rgba(83,74,183,0.15); }
+    .audio-banner button:hover { background: rgba(45, 106, 79, 0.1); }
 
     /* ══════════════════════════════
        RAG PANEL
