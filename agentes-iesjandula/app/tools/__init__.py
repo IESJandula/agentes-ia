@@ -1,7 +1,7 @@
 from .guia_profesorado_tool import guia_profesorado
 from .guia_alumnado_tool import guia_alumnado
 from .tavily_busqueda_tool import tool_busqueda_web_centro, tool_busqueda_general
-from .playwright_busqueda_tool import get_playwright_tools
+from .playwright_busqueda_tool import extraer_contenido_web
 
 
 async def obtener_tools_publicas() -> list:
@@ -13,14 +13,8 @@ async def obtener_tools_publicas() -> list:
         guia_alumnado,
         tool_busqueda_web_centro,   # búsqueda en la web del IES Jándula
         tool_busqueda_general,       # búsqueda general en internet
+        extraer_contenido_web        # nuevo: permite leer webs completas
     ]
-
-#    try:
-#        herramientas_playwright = await get_playwright_tools()
-#        herramientas.extend(herramientas_playwright)
-#    except Exception as e:
-#        print(f"⚠️ Error cargando Playwright: {e}")
-
     return herramientas
 
 
@@ -33,13 +27,8 @@ async def obtener_tools_profesorado() -> list:
         guia_alumnado,
         tool_busqueda_web_centro,   # búsqueda en la web del IES Jándula
         tool_busqueda_general,       # búsqueda general en internet
+        extraer_contenido_web        # nuevo: permite leer webs completas
     ]
-#    try:
-#        herramientas_playwright = await get_playwright_tools()
-#        herramientas.extend(herramientas_playwright)
-#    except Exception as e:
-#        print(f"⚠️ Error cargando Playwright: {e}")
-
     return herramientas
 
 

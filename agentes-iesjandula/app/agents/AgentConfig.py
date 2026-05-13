@@ -216,13 +216,22 @@ REGLAS DE ORO:
 
     # ── Chatbot público ───────────────────────────────────────────────────────
     async def chatbot_publico(estado: Estado) -> dict:
-        # Poda de historial: mantenemos los últimos 10 mensajes para no saturar al modelo
+        # Poda de historial inteligente: no cortamos en medio de una cadena Tool -> AI
         mensajes = estado["messages"]
-        if len(mensajes) > 10:
-            mensajes = mensajes[-10:]
+        if len(mensajes) > 12:
+            # Buscamos el HumanMessage más antiguo dentro de los últimos 12 para no romper la cadena
+            for i in range(len(mensajes) - 12, len(mensajes)):
+                if isinstance(mensajes[i], HumanMessage):
+                    mensajes = mensajes[i:]
+                    break
+            else:
+                mensajes = mensajes[-10:]
 
         tool_context = _build_tool_context(estado)
         system = SystemMessage(content=PROMPT_PUB + tool_context)
+        
+        # Google requiere que el primer mensaje tras el System sea un HumanMessage
+        # o que la secuencia sea coherente.
         respuesta = await _llm_invoke_con_retry(llm_pub, [system] + mensajes)
 
         # ── GUARDRAIL: forzar búsqueda si el LLM no llamó herramientas y no hay contexto ──
@@ -244,10 +253,15 @@ REGLAS DE ORO:
 
     # ── Chatbot profesorado ───────────────────────────────────────────────────
     async def chatbot_profesorado(estado: Estado) -> dict:
-        # Poda de historial
+        # Poda de historial inteligente
         mensajes = estado["messages"]
-        if len(mensajes) > 10:
-            mensajes = mensajes[-10:]
+        if len(mensajes) > 12:
+            for i in range(len(mensajes) - 12, len(mensajes)):
+                if isinstance(mensajes[i], HumanMessage):
+                    mensajes = mensajes[i:]
+                    break
+            else:
+                mensajes = mensajes[-10:]
 
         tool_context = _build_tool_context(estado)
         system = SystemMessage(content=PROMPT_PROF + tool_context)

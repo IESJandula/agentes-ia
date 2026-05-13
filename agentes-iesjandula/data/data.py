@@ -536,6 +536,15 @@ def inicializar_bases_datos(pdf_profes: str = None, pdf_alumnos: str = None):
 
         if not os.path.exists(path):
             print(f"⚠️ Archivo no encontrado: {path}")
+            # Debug: Listar archivos para ver qué hay realmente en el servidor
+            try:
+                folder = os.path.dirname(path)
+                if os.path.exists(folder):
+                    print(f"📂 Contenido de la carpeta {folder}: {os.listdir(folder)}")
+                else:
+                    print(f"❌ La carpeta contenedora no existe: {folder}")
+            except Exception as e:
+                print(f"⚠️ No se pudo listar la carpeta: {e}")
             continue
 
         try:
