@@ -32,7 +32,28 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         return self.embed_documents(list(input))
 
     def embed_documents(self, texts):
-        return self.embedding_client.embed_documents(texts)
+        """
+        Genera embeddings para una lista de textos. 
+        Asegura que la longitud de la salida coincida con la entrada.
+        """
+        try:
+            embeddings = self.embedding_client.embed_documents(texts)
+            if len(embeddings) != len(texts):
+                print(f"⚠️ [EMBEDDINGS] Mismatch: {len(texts)} textos -> {len(embeddings)} vectores. Reintentando unitariamente...")
+                # Si hay desajuste, procesar uno a uno para identificar el problema
+                final_embeddings = []
+                for t in texts:
+                    try:
+                        final_embeddings.append(self.embedding_client.embed_query(t))
+                    except Exception as e:
+                        print(f"❌ Error embebiendo texto individual: {e}")
+                        # Vector de ceros como fallback si falla uno solo (dim 768 para text-embedding-004)
+                        final_embeddings.append([0.0] * 768)
+                return final_embeddings
+            return embeddings
+        except Exception as e:
+            print(f"❌ Error crítico en embed_documents: {e}")
+            raise
 
     def embed_query(self, text=None, *, input=None, **kwargs):
         # ChromaDB puede llamar embed_query(input=...) como kwarg
@@ -41,7 +62,7 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
 
     @staticmethod
     def name() -> str:
-        return "gemini"
+        return "gemini-embeddings-v2"
 
     @staticmethod
     def build_from_config(config: dict) -> "GeminiEmbeddingFunction":
@@ -413,6 +434,9 @@ def procesar_y_añadir(file_path: str, perfil: str, nombre_original: str = None)
                     print(f"   🌀 Generando vectores para lote {lote_actual}...")
                     batch_embeddings = embedding_fn.embed_documents(batch_docs)
                     
+                    if len(batch_embeddings) != len(batch_docs):
+                        raise ValueError(f"Longitud inconsistente: {len(batch_docs)} docs vs {len(batch_embeddings)} embeddings")
+
                     coleccion.add(
                         documents=batch_docs,
                         metadatas=batch_meta,
@@ -432,8 +456,10 @@ def procesar_y_añadir(file_path: str, perfil: str, nombre_original: str = None)
                             print(f"❌ [DEBUG] Lote {lote_actual} falló tras {MAX_RETRIES} reintentos.")
                             raise
                     else:
-                        print(f"   ❌ Error inesperado en lote {lote_actual}: {batch_err}")
-                        raise  # error no recuperable
+                        print(f"   ❌ Error en lote {lote_actual} (intento {intento}/{MAX_RETRIES}): {batch_err}")
+                        if intento == MAX_RETRIES:
+                            raise  # error no recuperable tras reintentos
+                        time.sleep(2)
 
             # Pausa entre lotes para no superar el rate-limit
             if i + BATCH_SIZE < total:
