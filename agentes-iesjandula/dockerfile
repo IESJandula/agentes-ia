@@ -23,12 +23,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 4. Instalamos las dependencias de Python
+# 4. Instalamos las dependencias de Python PASO A PASO para no agotar la RAM
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# Forzamos la instalación de Torch CPU para que la imagen sea ligera y no use CUDA (ahorra ~4GB)
+# A. Instalamos Torch CPU primero (muy pesado)
 RUN pip install --no-cache-dir torch --extra-index-url https://download.pytorch.org/whl/cpu
 
+# B. Instalamos Docling (muy pesado, lo separamos)
+RUN pip install --no-cache-dir docling
+
+# C. Instalamos el resto de dependencias
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

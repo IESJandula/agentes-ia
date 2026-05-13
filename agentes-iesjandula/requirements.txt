@@ -32,8 +32,6 @@ docling
 
 # --- Audio y Voz (STT/TTS) ---
 soundfile
---extra-index-url https://download.pytorch.org/whl/cpu
-torch
 numpy
 transformers
 kokoro-onnx
