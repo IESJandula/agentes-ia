@@ -36,6 +36,8 @@ numpy
 transformers
 accelerate
 Pillow
+timm
+torchvision --extra-index-url https://download.pytorch.org/whl/cpu
 kokoro-onnx
 
 # --- Base de Datos / Sistema ---
