@@ -409,10 +409,15 @@ def procesar_y_añadir(file_path: str, perfil: str, nombre_original: str = None)
             # Retry con backoff exponencial para manejar 429 RESOURCE_EXHAUSTED
             for intento in range(1, MAX_RETRIES + 1):
                 try:
+                    # Generar embeddings manualmente para mayor robustez
+                    print(f"   🌀 Generando vectores para lote {lote_actual}...")
+                    batch_embeddings = embedding_fn.embed_documents(batch_docs)
+                    
                     coleccion.add(
                         documents=batch_docs,
                         metadatas=batch_meta,
                         ids=batch_ids,
+                        embeddings=batch_embeddings
                     )
                     print(f"   ✅ Lote {lote_actual}/{num_lotes} insertado ({len(batch_docs)} chunks)")
                     break  # éxito, salir del bucle de reintentos
@@ -420,13 +425,14 @@ def procesar_y_añadir(file_path: str, perfil: str, nombre_original: str = None)
                     err_str = str(batch_err)
                     if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
                         wait_time = PAUSE_ENTRE_LOTES * (2 ** intento)  # backoff exponencial
-                        print(f"   ⏳ Rate-limit alcanzado (lote {lote_actual}, intento {intento}/{MAX_RETRIES}). "
+                        print(f"   ⏳ Rate-limit (Gemini) en lote {lote_actual}, intento {intento}/{MAX_RETRIES}. "
                               f"Esperando {wait_time}s...")
                         time.sleep(wait_time)
                         if intento == MAX_RETRIES:
                             print(f"❌ [DEBUG] Lote {lote_actual} falló tras {MAX_RETRIES} reintentos.")
                             raise
                     else:
+                        print(f"   ❌ Error inesperado en lote {lote_actual}: {batch_err}")
                         raise  # error no recuperable
 
             # Pausa entre lotes para no superar el rate-limit
