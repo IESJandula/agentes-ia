@@ -100,7 +100,7 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
     if not os.getenv("GOOGLE_API_KEY"):
         raise ValueError("⚠️ GOOGLE_API_KEY no está configurada en las variables de entorno")
 
-    _model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    _model_name = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
     print(f"   🤖 Usando modelo LLM: {_model_name}")
     _base_llm  = ChatGoogleGenerativeAI(
         model=_model_name,
