@@ -29,8 +29,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 # A. Instalamos Torch CPU primero (muy pesado)
 RUN pip install --no-cache-dir torch --extra-index-url https://download.pytorch.org/whl/cpu
 
-# B. Instalamos Docling (muy pesado, lo separamos)
-RUN pip install --no-cache-dir docling
+# B. Instalamos Docling y dependencias de imagen (muy pesado)
+RUN pip install --no-cache-dir "docling[standard]" transformers accelerate Pillow
 
 # C. Instalamos el resto de dependencias
 COPY requirements.txt .
