@@ -16,6 +16,7 @@ langchain-google-genai
 # --- Herramientas de Búsqueda y Navegación ---
 playwright
 langchain-tavily
+tavily-python
 beautifulsoup4
 requests
 rapidfuzz
@@ -31,6 +32,7 @@ docling
 
 # --- Audio y Voz (STT/TTS) ---
 soundfile
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch
 numpy
 transformers
