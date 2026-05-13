@@ -7,13 +7,20 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=8010
 WORKDIR /app
 
-# 3. Instalamos dependencias del sistema MÍNIMAS
-# Solo FFmpeg para procesamiento de audio/vídeo si es necesario
-# Eliminadas librerías de imagen pesadas ya que no usamos Ollama localmente
+# 3. Instalamos dependencias del sistema NECESARIAS
+# Añadimos librerías para procesamiento de imágenes, PDF y OCR (libxcb, libgl, etc.)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libffi-dev \
     libssl-dev \
+    libgl1 \
+    libglib2.0-0 \
+    libxcb1 \
+    libx11-6 \
+    libxext6 \
+    libxrender1 \
+    libsm6 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # 4. Instalamos las dependencias de Python
