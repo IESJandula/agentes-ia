@@ -1,5 +1,5 @@
-# 1. Usamos Python 3.12 slim (más ligero)
-FROM python:3.12-slim
+# 1. Usamos Python 3.12 slim (versión Bookworm, más estable para dependencias de sistema)
+FROM python:3.12-slim-bookworm
 
 # 2. Configuraciones de entorno
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -38,6 +38,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 5. Playwright para navegación web
+ENV DEBIAN_FRONTEND=noninteractive
 RUN playwright install --with-deps chromium
 
 # 6. Copiamos el resto de la aplicación
