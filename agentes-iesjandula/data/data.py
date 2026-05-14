@@ -137,7 +137,7 @@ embedding_fn = GeminiEmbeddingFunction(
 # Pipeline optimizada: desactiva generación de imágenes para reducir consumo de RAM
 _pdf_pipeline_options = PdfPipelineOptions(
     do_table_structure=True,
-    do_ocr=True,
+    do_ocr=False, # OCR DESACTIVADO: Evita el OOMKilled en servidores pequeños (reduce el uso de RAM de 3GB a ~200MB)
     generate_page_images=False,
     generate_picture_images=False,
     generate_table_images=False,
