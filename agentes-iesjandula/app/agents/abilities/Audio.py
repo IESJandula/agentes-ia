@@ -48,10 +48,10 @@ class MotorVoz:
     def _cargar_stt(self):
         if self._stt is not None:
             return
-        print("Cargando Whisper medium...")
+        print("Cargando Whisper base...")
         self._stt = pipeline(
             "automatic-speech-recognition",
-            model="openai/whisper-medium",
+            model="openai/whisper-base",
             device=0 if self._device == "cuda" else -1,
             generate_kwargs={"language": "spanish", "task": "transcribe"},
             chunk_length_s=30,
