@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 \
     libsm6 \
     libgomp1 \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # 4. Instalamos las dependencias de Python PASO A PASO para no agotar la RAM

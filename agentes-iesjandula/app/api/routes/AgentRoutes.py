@@ -13,12 +13,12 @@ async def consultar_agente(consulta: ConsultaRequest):
     )
 
 @router.post("/speak")
-async def consultar_agente_voz(audio_file: UploadFile = File(...)):
-    return await AgenteController.handle_speak(audio_file)
+async def consultar_agente_voz(audio_file: UploadFile = File(...), perfil: str = "profesores"):
+    return await AgenteController.handle_speak(audio_file, perfil=perfil)
 
 @router.post("/transcribe")
-async def consultar_agente_hibrido(audio_file: UploadFile = File(...)):
-    return await AgenteController.handle_transcribe(audio_file)
+async def consultar_agente_hibrido(audio_file: UploadFile = File(...), perfil: str = "profesores"):
+    return await AgenteController.handle_transcribe(audio_file, perfil=perfil)
 
 @router.get("/health")
 async def health_check():
