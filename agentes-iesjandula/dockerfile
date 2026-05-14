@@ -41,10 +41,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV DEBIAN_FRONTEND=noninteractive
 RUN playwright install --with-deps chromium
 
-# 6. Copiamos el resto de la aplicación
-COPY . .
-
-# 6.5 Descargamos los modelos de Kokoro TTS (usamos curl -s para no saturar los logs de Coolify)
+# 5.5 Descargamos los modelos de Kokoro TTS (antes de copiar el código para aprovechar la caché de Docker)
 RUN apt-get update && apt-get install -y curl && \
     mkdir -p app/agents/abilities && \
     echo "Descargando modelo ONNX..." && \
@@ -52,6 +49,9 @@ RUN apt-get update && apt-get install -y curl && \
     echo "Descargando voces..." && \
     curl -sSL -o app/agents/abilities/voices-v1.0.bin https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/voices/voices.bin && \
     apt-get purge -y curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
+# 6. Copiamos el resto de la aplicación
+COPY . .
 
 # 7. Volumen local persistente para la base de datos Chroma
 VOLUME /app/data/chroma_db_v3
