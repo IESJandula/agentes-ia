@@ -317,23 +317,9 @@
       flex-direction: column;
       gap: 24px;
       position: relative;
-      background-color: var(--bg);
-    }
-
-    .messages::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: url('static/fondo.jpg?v=1') center/cover no-repeat fixed;
-      opacity: 0.2;
-      /* Muy sutil para que no moleste a la lectura */
-      pointer-events: none;
-      z-index: 0;
-      filter: grayscale(100%) brightness(0.8);
-      /* Ajuste para que el blanco no brille demasiado */
+      /* Fondo con imagen y overlay oscuro integrado para evitar cortes */
+      background: linear-gradient(rgba(13, 13, 18, 0.92), rgba(13, 13, 18, 0.92)), 
+                  url('static/fondo.jpg?v=1') center/cover no-repeat fixed;
     }
 
     .msg {
