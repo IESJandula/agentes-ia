@@ -50,8 +50,8 @@ VOLUME /app/data/chroma_db_v3
 # 8. Exponemos el puerto 8010 (no 8000, porque está ocupado en Coolify)
 EXPOSE 8010
 
-# 8. Health check (opcional pero recomendado en Coolify)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# 8. Health check (aumentado el start-period a 300s para dar tiempo al OCR de procesar los PDFs la primera vez)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8010/api', timeout=5)" || exit 1
 
 # 9. Comando de ejecución
