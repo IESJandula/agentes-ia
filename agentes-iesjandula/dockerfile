@@ -44,6 +44,13 @@ RUN playwright install --with-deps chromium
 # 6. Copiamos el resto de la aplicación
 COPY . .
 
+# 6.5 Descargamos los modelos de Kokoro TTS (si no existen)
+RUN apt-get update && apt-get install -y wget && \
+    mkdir -p app/agents/abilities && \
+    wget -O app/agents/abilities/kokoro-v1.0.onnx https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/onnx/model.onnx && \
+    wget -O app/agents/abilities/voices-v1.0.bin https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/voices/voices.bin && \
+    apt-get purge -y wget && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
 # 7. Volumen local persistente para la base de datos Chroma
 VOLUME /app/data/chroma_db_v3
 
