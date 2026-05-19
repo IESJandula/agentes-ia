@@ -7,8 +7,8 @@ Instalación:
     pip install kokoro-onnx soundfile torch transformers
 
 Archivos de modelo necesarios (descargar una sola vez):
-    onnx/model.onnx  →  https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/tree/main/onnx
-    voices/ef_dora.bin (u otra voz)  →  https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/tree/main/voices
+    onnx/kokoro-v1.0.onnx  →  https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx
+    voices/voices-v1.0.bin →  https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
 
 Coloca ambos archivos en el mismo directorio que este script,
 o ajusta MODEL_PATH y VOICES_PATH a la ruta que prefieras.
@@ -66,15 +66,15 @@ class MotorVoz:
         if not MODEL_PATH.exists():
             raise FileNotFoundError(
                 f"Falta el modelo Kokoro.\n"
-                f"Descarga 'model.onnx' desde:\n"
-                f"  https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/tree/main/onnx\n"
+                f"Descarga 'kokoro-v1.0.onnx' desde:\n"
+                f"  https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx\n"
                 f"y colócalo en: '{_BASE_DIR}'"
             )
         if not self._voz_path.exists():
             raise FileNotFoundError(
                 f"Falta el archivo de voz '{self._voz_path.name}'.\n"
                 f"Descárgalo desde:\n"
-                f"  https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/tree/main/voices\n"
+                f"  https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin\n"
                 f"y colócalo en: '{_BASE_DIR}'"
             )
 
