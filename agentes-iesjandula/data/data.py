@@ -386,8 +386,10 @@ def procesar_y_añadir(file_path: str, perfil: str, nombre_original: str = None)
         chunk_overlap=300,  # solapamiento aumentado para no perder contexto entre chunks
     )
     print("✂️ [DEBUG] Fragmentando texto...")
-    chunks = text_splitter.split_text(texto)
-    print(f"   {len(chunks)} fragmentos generados.")
+    raw_chunks = text_splitter.split_text(texto)
+    # Filtramos fragmentos vacíos o que solo contengan espacios
+    chunks = [c for c in raw_chunks if c.strip()]
+    print(f"   {len(chunks)} fragmentos válidos generados (de {len(raw_chunks)} originales).")
 
     nombre_archivo = nombre_original if nombre_original else os.path.basename(file_path)
     nombre_coleccion = _PERFIL_A_COLECCION[perfil]

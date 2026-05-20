@@ -17,7 +17,10 @@ class AgenteController:
             return ConsultaResponse(respuesta=texto)
         except Exception as e:
             traceback.print_exc()
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(
+                status_code=500, 
+                detail="Lo siento, no he podido generar una respuesta en este momento debido a un problema técnico temporal."
+            )
 
     @staticmethod
     async def handle_speak(audio_file: UploadFile, perfil: str = "profesores"):
@@ -35,7 +38,10 @@ class AgenteController:
             return response
         except Exception as e:
             traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Error en voz: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail="Lo siento, ha ocurrido un error al procesar la voz. Por favor, inténtalo de nuevo más tarde."
+            )
 
     @staticmethod
     async def handle_transcribe(audio_file: UploadFile, perfil: str = "profesores"):
@@ -43,4 +49,7 @@ class AgenteController:
             return await agents_service.procesar_hibrido(audio_file, perfil=perfil)
         except Exception as e:
             traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Error híbrido: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail="Lo siento, ha ocurrido un error al procesar tu solicitud. Por favor, inténtalo de nuevo."
+            )
