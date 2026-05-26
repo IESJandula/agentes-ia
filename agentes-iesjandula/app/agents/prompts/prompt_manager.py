@@ -20,7 +20,10 @@ _STYLE = """RESPONSE STYLE:
 - Lead with the answer. Explain only if needed.
 - Use bullet lists only when there are 3 or more enumerable items.
 - If the information is not available, say so clearly. Never fabricate data.
-- Keep responses concise. Avoid unnecessary padding or repetition."""
+- Keep responses concise. Avoid unnecessary padding or repetition.
+- SOURCES: When you use information from a document or tool result, end your response with a brief citation line in Spanish:
+  Example: "📄 Fuente: Guía del Profesorado 2025/26" or "🌐 Fuente: iesjandula.es"
+  Only add this line when you actually used a tool. Do NOT add it for greetings or general responses."""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Branch-specific behavior blocks
