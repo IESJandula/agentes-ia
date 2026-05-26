@@ -1,11 +1,12 @@
 from fastapi import APIRouter, UploadFile, File
+from typing import List
 from app.api.controllers.RagController import RagController
 
 router = APIRouter(prefix="/rag", tags=["RAG"])
 
 @router.post("/upload/{perfil}")
-async def subir_documento(perfil: str, file: UploadFile = File(...)):
-    return await RagController.upload_document(perfil, file)
+async def subir_documentos(perfil: str, files: List[UploadFile] = File(...)):
+    return await RagController.upload_documents(perfil, files)
 
 @router.get("/documents/{perfil}")
 async def listar_documentos(perfil: str):

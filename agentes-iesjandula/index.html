@@ -469,6 +469,52 @@
       display: block;
     }
 
+    /* Fuentes citadas */
+    .fuentes-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .fuente-tag {
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 20px;
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      color: #a78bfa;
+      white-space: nowrap;
+    }
+
+    /* Herramienta en ejecución */
+    .tool-thinking {
+      color: var(--text-dim);
+      font-style: italic;
+      font-size: 0.88rem;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    /* Cursor de escritura en streaming */
+    .streaming-content::after {
+      content: '▋';
+      display: inline-block;
+      animation: blink 0.8s step-end infinite;
+      color: var(--accent);
+      margin-left: 2px;
+    }
+    .streaming-content.done::after { display: none; }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
     .bubble .markdown-content blockquote {
       border-left: 3px solid var(--accent);
       padding-left: 16px;
@@ -1210,7 +1256,7 @@
         </div>
       </div>
 
-      <input type="file" id="fileInput" accept=".pdf,.txt,.md" style="display:none" onchange="onFileSelected(event)" />
+      <input type="file" id="fileInput" accept=".pdf,.txt,.md" style="display:none" multiple onchange="onFileSelected(event)" />
 
       <div class="upload-zone" id="uploadZone" onclick="openFilePicker()" ondragover="onDragOver(event)"
         ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
@@ -1222,7 +1268,7 @@
         </div>
         <div class="upload-text">
           <h4 id="uploadLabel">Subir a Profesores</h4>
-          <p>Arrastra archivos o haz clic para explorar</p>
+          <p>Arrastra archivos o haz clic para explorar (puedes seleccionar varios)</p>
           <div id="uploadFilename" style="margin-top: 10px; color: var(--accent); font-weight: 600;"></div>
         </div>
         <div class="progress-container" id="progressWrap">
@@ -1323,7 +1369,7 @@
       return div.innerHTML;
     }
 
-    function addMessage(role, text, isMarkdown = false) {
+    function addMessage(role, text, isMarkdown = false, fuentes = []) {
       const div = document.createElement('div');
       div.className = `msg ${role}`;
 
@@ -1339,16 +1385,69 @@
         ? `<img src="static/logo.png?v=1" style="width: 100%; height: 100%; border-radius: inherit; object-fit: cover;">`
         : 'Tú';
 
+      let fuentesHtml = '';
+      if (fuentes && fuentes.length > 0) {
+        const items = fuentes.map(f => `<span class="fuente-tag">📄 ${escHtml(f)}</span>`).join('');
+        fuentesHtml = `<div class="fuentes-container">${items}</div>`;
+      }
+
       div.innerHTML = `
       <div class="avatar ${role}">${avatarContent}</div>
       <div class="bubble">
         <div class="markdown-content">${contentHtml}</div>
+        ${fuentesHtml}
       </div>
     `;
 
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
       return div;
+    }
+
+    function addStreamingMessage() {
+      const div = document.createElement('div');
+      div.className = 'msg bot';
+      const avatarContent = `<img src="static/logo.png?v=1" style="width: 100%; height: 100%; border-radius: inherit; object-fit: cover;">`;
+      div.innerHTML = `
+        <div class="avatar bot">${avatarContent}</div>
+        <div class="bubble">
+          <div class="markdown-content streaming-content"></div>
+          <div class="fuentes-container" style="display:none"></div>
+        </div>
+      `;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return div;
+    }
+
+    function updateStreamingMessage(div, textoAcumulado, herramientaActiva = null) {
+      const content = div.querySelector('.streaming-content');
+      if (!content) return;
+      if (herramientaActiva) {
+        const iconos = { guia_profesorado: '📋', guia_alumnado: '📚', busqueda_web_ies_jandula: '🌐', busqueda_web_general: '🔍', extraer_contenido_web: '📄' };
+        const icono = iconos[herramientaActiva] || '🔧';
+        content.innerHTML = `<p class="tool-thinking">${icono} Consultando ${herramientaActiva.replace(/_/g, ' ')}...</p>`;
+      } else if (textoAcumulado) {
+        const rawHtml = marked.parse(textoAcumulado);
+        content.innerHTML = DOMPurify.sanitize(rawHtml);
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function finalizeStreamingMessage(div, textoFinal, fuentes) {
+      const content = div.querySelector('.streaming-content');
+      const fuentesDiv = div.querySelector('.fuentes-container');
+      if (content) {
+        const rawHtml = marked.parse(textoFinal);
+        content.innerHTML = DOMPurify.sanitize(rawHtml);
+        content.classList.add('done'); // quita cursor de escritura
+      }
+      if (fuentesDiv && fuentes && fuentes.length > 0) {
+        const items = fuentes.map(f => `<span class="fuente-tag">📄 ${escHtml(f)}</span>`).join('');
+        fuentesDiv.innerHTML = items;
+        fuentesDiv.style.display = 'flex';
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
     function addTyping() {
@@ -1386,31 +1485,79 @@
       chatInput.style.height = 'auto';
 
       addMessage('user', text);
-      addTyping();
-
       const perfil = document.getElementById('perfilChatSelect').value;
 
+      // Mensaje de streaming vacío
+      const streamDiv = addStreamingMessage();
+      updateStreamingMessage(streamDiv, '', null);
+
+      let textoAcumulado = '';
+      let herramientaActiva = null;
+
       try {
-        const res = await fetch(`${API}/api/chat`, {
+        const res = await fetch(`${API}/api/chat/stream`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            pregunta: text,
-            perfil: perfil,
-            thread_id: SESSION_ID
-          })
+          body: JSON.stringify({ pregunta: text, perfil, thread_id: SESSION_ID })
         });
 
-        const data = await res.json();
-        removeTyping();
-
-        if (res.ok) {
-          addMessage('bot', data.respuesta || data.message || "No he recibido una respuesta válida.", true);
-        } else {
+        if (!res.ok) {
+          const data = await res.json();
+          streamDiv.remove();
           addMessage('bot', `⚠️ **Error del Sistema:** ${data.detail || 'Error desconocido'}`);
+          return;
         }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // guarda línea incompleta
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
+
+            try {
+              const evento = JSON.parse(jsonStr);
+
+              if (evento.tipo === 'herramienta') {
+                herramientaActiva = evento.nombre;
+                // Si había texto acumulado (de un pass previo con guardrail), descartarlo
+                textoAcumulado = '';
+                updateStreamingMessage(streamDiv, '', herramientaActiva);
+
+              } else if (evento.tipo === 'token') {
+                herramientaActiva = null;
+                textoAcumulado += evento.texto;
+                updateStreamingMessage(streamDiv, textoAcumulado, null);
+
+              } else if (evento.tipo === 'fin') {
+                finalizeStreamingMessage(streamDiv, textoAcumulado, evento.fuentes || []);
+
+              } else if (evento.tipo === 'error') {
+                streamDiv.remove();
+                addMessage('bot', `⚠️ ${evento.mensaje}`);
+              }
+            } catch (e) { /* JSON parcial, ignorar */ }
+          }
+        }
+
+        // Si no llegó token ninguno, mostrar mensaje de fallback
+        if (!textoAcumulado) {
+          streamDiv.remove();
+          addMessage('bot', "No he podido generar una respuesta. Inténtalo de nuevo.");
+        }
+
       } catch (err) {
-        removeTyping();
+        streamDiv.remove();
         addMessage('bot', "⚠️ **Error de Conexión:** No se ha podido contactar con el servidor.");
       } finally {
         btnSend.disabled = false;
@@ -1537,7 +1684,7 @@
        RAG / DOCUMENT MANAGEMENT
     ══════════════════════════════ */
     let currentPerfil = 'profesores';
-    let selectedFile = null;
+    let selectedFile = [];
 
     function selectPerfil(perfil) {
       currentPerfil = perfil;
@@ -1553,7 +1700,7 @@
     }
 
     function resetUpload() {
-      selectedFile = null;
+      selectedFile = [];
       document.getElementById('fileInput').value = '';
       document.getElementById('uploadFilename').textContent = '';
       document.getElementById('btnUpload').classList.remove('visible');
@@ -1566,8 +1713,8 @@
     }
 
     function onFileSelected(e) {
-      const file = e.target.files[0];
-      if (file) handleFileSelection(file);
+      const files = Array.from(e.target.files);
+      if (files.length > 0) handleFileSelection(files);
     }
 
     function onDragOver(e) { e.preventDefault(); document.getElementById('uploadZone').classList.add('dragover'); }
@@ -1575,27 +1722,32 @@
     function onDrop(e) {
       e.preventDefault();
       document.getElementById('uploadZone').classList.remove('dragover');
-      const file = e.dataTransfer.files[0];
-      if (file) handleFileSelection(file);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) handleFileSelection(files);
     }
 
-    function handleFileSelection(file) {
-      const ext = file.name.split('.').pop().toLowerCase();
+    function handleFileSelection(files) {
       const allowed = ['pdf', 'txt', 'md'];
+      const validos = files.filter(f => allowed.includes(f.name.split('.').pop().toLowerCase()));
+      const invalidos = files.filter(f => !allowed.includes(f.name.split('.').pop().toLowerCase()));
 
-      if (!allowed.includes(ext)) {
-        showToast("Formato no soportado. Use PDF, TXT o MD.", "error");
-        return;
+      if (invalidos.length > 0) {
+        showToast(`Archivos no soportados: ${invalidos.map(f => f.name).join(', ')}`, "error");
       }
 
-      selectedFile = file;
-      document.getElementById('uploadFilename').textContent = `Seleccionado: ${file.name}`;
+      if (validos.length === 0) return;
+
+      selectedFile = validos; // ahora es un array
+      const label = validos.length === 1
+        ? `Seleccionado: ${validos[0].name}`
+        : `Seleccionados: ${validos.length} archivos (${validos.map(f => f.name).join(', ')})`;
+      document.getElementById('uploadFilename').textContent = label;
       document.getElementById('btnUpload').classList.add('visible');
     }
 
     async function uploadFile(e) {
       e.stopPropagation();
-      if (!selectedFile) return;
+      if (!selectedFile || selectedFile.length === 0) return;
 
       const btn = document.getElementById('btnUpload');
       const prog = document.getElementById('progressWrap');
@@ -1613,7 +1765,7 @@
       }, 150);
 
       const fd = new FormData();
-      fd.append('file', selectedFile);
+      selectedFile.forEach(f => fd.append('files', f));
 
       try {
         const res = await fetch(`${API}/api/rag/upload/${currentPerfil}`, { method: 'POST', body: fd });
@@ -1622,7 +1774,13 @@
 
         if (res.ok) {
           const data = await res.json();
-          showToast(`Éxito: Documento indexado en ${data.fragmentos} fragmentos.`, "success");
+          const totalFragmentos = data.resultados
+            .filter(r => r.status === 'success')
+            .reduce((acc, r) => acc + (r.fragmentos || 0), 0);
+          const msg = data.fallidos > 0
+            ? `${data.exitosos}/${data.total} subidos correctamente. ${data.fallidos} fallaron.`
+            : `${data.exitosos} archivo(s) indexados en ${totalFragmentos} fragmentos.`;
+          showToast(msg, data.fallidos > 0 ? "error" : "success");
           resetUpload();
           loadDocuments();
         } else {
