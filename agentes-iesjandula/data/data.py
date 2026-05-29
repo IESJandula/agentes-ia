@@ -31,29 +31,40 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
             input = [input]
         return self.embed_documents(list(input))
 
+    # Tamaño máximo de sub-lote para la API de Gemini Embeddings (free tier: ~5 req/min).
+    # El cliente LangChain puede devolver menos vectores de los esperados si el batch es grande.
+    # Con sub-lotes de 5 se evita el mismatch sin caer al fallback unitario.
+    _EMBED_BATCH = 5
+
     def embed_documents(self, texts):
         """
-        Genera embeddings para una lista de textos. 
-        Asegura que la longitud de la salida coincida con la entrada.
+        Genera embeddings para una lista de textos en sub-lotes de _EMBED_BATCH.
+        Evita el mismatch de la API de Gemini Embeddings en free tier.
         """
-        try:
-            embeddings = self.embedding_client.embed_documents(texts)
-            if len(embeddings) != len(texts):
-                print(f"⚠️ [EMBEDDINGS] Mismatch: {len(texts)} textos -> {len(embeddings)} vectores. Reintentando unitariamente...")
-                # Si hay desajuste, procesar uno a uno para identificar el problema
-                final_embeddings = []
-                for t in texts:
-                    try:
-                        final_embeddings.append(self.embedding_client.embed_query(t))
-                    except Exception as e:
-                        print(f"❌ Error embebiendo texto individual: {e}")
-                        # Vector de ceros como fallback si falla uno solo (dim 768 para text-embedding-004)
-                        final_embeddings.append([0.0] * 768)
-                return final_embeddings
-            return embeddings
-        except Exception as e:
-            print(f"❌ Error crítico en embed_documents: {e}")
-            raise
+        if not texts:
+            return []
+
+        final_embeddings = []
+        for i in range(0, len(texts), self._EMBED_BATCH):
+            sub = texts[i:i + self._EMBED_BATCH]
+            try:
+                batch_result = self.embedding_client.embed_documents(sub)
+                if len(batch_result) == len(sub):
+                    final_embeddings.extend(batch_result)
+                else:
+                    # Sub-lote aún devuelve mismatch → fallback unitario solo en este sub-lote
+                    print(f"⚠️ [EMBEDDINGS] Mismatch en sub-lote ({len(sub)} -> {len(batch_result)}). Procesando uno a uno...")
+                    for t in sub:
+                        try:
+                            final_embeddings.append(self.embedding_client.embed_query(t))
+                        except Exception as e:
+                            print(f"❌ Error embebiendo texto: {e}")
+                            final_embeddings.append([0.0] * 3072)
+            except Exception as e:
+                print(f"❌ Error en sub-lote de embeddings: {e}")
+                raise
+
+        return final_embeddings
 
     def embed_query(self, text=None, *, input=None, **kwargs):
         # ChromaDB puede llamar embed_query(input=...) como kwarg
@@ -154,13 +165,15 @@ DOCLING_PAGE_BATCH_SIZE = 4
 
 # Colecciones — se crean si no existen
 # Nombres internos de ChromaDB
-_COLECCION_PROFESORES = "guia_profesorado"
-_COLECCION_ALUMNOS    = "guia_alumnado"
+_COLECCION_PROFESORES  = "guia_profesorado"
+_COLECCION_ALUMNOS     = "guia_alumnado"
+_COLECCION_CONOCIMIENTO = "conocimiento_web"  # auto-indexado desde búsquedas web
 
 # Perfil → nombre de colección ChromaDB
 _PERFIL_A_COLECCION = {
-    "profesores": _COLECCION_PROFESORES,
-    "alumnos":    _COLECCION_ALUMNOS,
+    "profesores":  _COLECCION_PROFESORES,
+    "alumnos":     _COLECCION_ALUMNOS,
+    "conocimiento": _COLECCION_CONOCIMIENTO,
 }
 
 def _crear_o_recrear_coleccion(nombre_coleccion: str, embedding_fn):
@@ -195,13 +208,15 @@ def _crear_o_recrear_coleccion(nombre_coleccion: str, embedding_fn):
         else:
             raise  # Re-lanzar si no es el error esperado
 
-profesores_col = _crear_o_recrear_coleccion(_COLECCION_PROFESORES, embedding_fn)
-alumnos_col = _crear_o_recrear_coleccion(_COLECCION_ALUMNOS, embedding_fn)
+profesores_col  = _crear_o_recrear_coleccion(_COLECCION_PROFESORES,   embedding_fn)
+alumnos_col     = _crear_o_recrear_coleccion(_COLECCION_ALUMNOS,      embedding_fn)
+conocimiento_col = _crear_o_recrear_coleccion(_COLECCION_CONOCIMIENTO, embedding_fn)
 
 # Debug: Mostrar conteo al iniciar
 print(f"📊 [DATABASE] Versión: {os.path.basename(persist_db_path)}")
-print(f"📊 [DATABASE] Documentos en Profesores: {profesores_col.count()}")
-print(f"📊 [DATABASE] Documentos en Alumnos:    {alumnos_col.count()}")
+print(f"📊 [DATABASE] Documentos en Profesores:   {profesores_col.count()}")
+print(f"📊 [DATABASE] Documentos en Alumnos:      {alumnos_col.count()}")
+print(f"📊 [DATABASE] Conocimiento web aprendido: {conocimiento_col.count()}")
 
 # ---------------------------------------------------------------------------
 # Helpers internos
@@ -230,16 +245,27 @@ def query_coleccion(coleccion, query: str, n_results: int = 8, include=None):
     )
 
 
+def _get_fresh_collection(nombre_coleccion: str):
+    """
+    Siempre obtiene una referencia FRESCA de ChromaDB.
+    Evita el NotFoundError que ocurre cuando la referencia a nivel de módulo
+    (profesores_col / alumnos_col) queda obsoleta tras un reinicio del servidor Chroma.
+    """
+    return client.get_or_create_collection(
+        name=nombre_coleccion,
+        embedding_function=embedding_fn,
+    )
+
+
 def obtener_coleccion(perfil: str):
     """
-    Devuelve el objeto de colección ChromaDB según el perfil ('profesores'|'alumnos').
-    Lanza ValueError si el perfil no es válido.
+    Devuelve una referencia fresca a la colección ChromaDB para el perfil dado.
+    Siempre llama a get_or_create_collection para evitar UUIDs stale.
     """
-    if perfil == "profesores":
-        return profesores_col
-    elif perfil == "alumnos":
-        return alumnos_col
-    raise ValueError(f"Perfil desconocido: '{perfil}'. Usa 'profesores' o 'alumnos'.")
+    nombre = _PERFIL_A_COLECCION.get(perfil)
+    if not nombre:
+        raise ValueError(f"Perfil desconocido: '{perfil}'. Usa 'profesores' o 'alumnos'.")
+    return _get_fresh_collection(nombre)
 
 
 def _contar_paginas_pdf(file_path: str) -> int:
@@ -364,6 +390,137 @@ def _extraer_texto(file_path: str) -> str:
     return ""
 
 # ---------------------------------------------------------------------------
+# Chunking inteligente para documentos legales
+# ---------------------------------------------------------------------------
+
+# Separadores con prioridad para respetar la estructura de textos normativos
+_SEPARADORES_LEGALES = [
+    "\nArtículo ", "\nART. ", "\nArt. ",
+    "\nApartado ", "\nDisposición ", "\nDisposicion ",
+    "\nCAPÍTULO ", "\nCAPITULO ", "\nCapítulo ",
+    "\nSECCIÓN ", "\nSECCION ", "\nSección ",
+    "\nTÍTULO ", "\nTITULO ", "\nTítulo ",
+    "\nAnexo ", "\nANEXO ",
+    "\n\n", "\n", " ",
+]
+
+_PATRONES_LEGALES = [
+    "ley", "decreto", "orden", "resolución", "resolucion",
+    "instrucción", "instruccion", "circular", "boe", "boja",
+    "normativa", "reglamento", "estatuto", "lomloe", "loe",
+    "logse", "lomce", "convocatoria", "oposicion", "concurso",
+]
+
+
+def _es_documento_legal(nombre_archivo: str) -> bool:
+    """Detecta si el nombre del archivo sugiere un documento normativo."""
+    nombre_lower = nombre_archivo.lower()
+    return any(p in nombre_lower for p in _PATRONES_LEGALES)
+
+
+# ---------------------------------------------------------------------------
+# Auto-indexado de resultados de búsqueda web (aprendizaje continuo)
+# ---------------------------------------------------------------------------
+
+def auto_indexar_resultado_web(
+    contenido_raw: str,
+    query_original: str,
+    nombre_tool: str = "web",
+) -> int:
+    """
+    Parsea la salida de una tool de búsqueda Tavily y guarda cada resultado
+    en la colección 'conocimiento_web' de ChromaDB si no estaba ya indexado.
+
+    El formato esperado del contenido_raw es:
+        FUENTE: https://...
+        TÍTULO: ...
+        CONTENIDO: ...
+        ---
+        FUENTE: ...
+
+    Devuelve el número total de chunks insertados.
+    """
+    from datetime import date as _date
+    import re as _re
+
+    if not contenido_raw or len(contenido_raw.strip()) < 200:
+        return 0
+
+    # Parsear bloques separados por "---"
+    bloques = contenido_raw.split("\n---\n")
+    total_indexados = 0
+
+    for bloque in bloques:
+        url_match    = _re.search(r"FUENTE:\s*(https?://\S+)", bloque)
+        titulo_match = _re.search(r"TÍTULO:\s*(.+)", bloque)
+        cont_match   = _re.search(r"CONTENIDO:\s*([\s\S]+)", bloque)
+
+        if not url_match or not cont_match:
+            continue
+
+        url      = url_match.group(1).strip()
+        titulo   = titulo_match.group(1).strip() if titulo_match else url
+        contenido = cont_match.group(1).strip()
+
+        if len(contenido) < 150:
+            continue
+
+        # Verificar si esta URL ya está indexada
+        try:
+            existing = conocimiento_col.get(where={"source_url": url}, limit=1)
+            if existing.get("ids"):
+                continue  # Ya indexado — no duplicar
+        except Exception:
+            pass  # Si el where-filter falla, continuar de todas formas
+
+        # Chunking con separadores legales si el dominio es normativo
+        _dominios_legales = ("boe.es", "boja.", "juntadeandalucia.es", "todofp.es")
+        separadores = _SEPARADORES_LEGALES if any(d in url for d in _dominios_legales) else None
+
+        splitter_kwargs = {
+            "chunk_size": 1200,
+            "chunk_overlap": 200,
+        }
+        if separadores:
+            splitter_kwargs["separators"] = separadores
+
+        splitter = RecursiveCharacterTextSplitter(**splitter_kwargs)
+        chunks = [c for c in splitter.split_text(contenido) if c.strip() and len(c.strip()) > 100]
+
+        if not chunks:
+            continue
+
+        chunks = chunks[:15]  # Máximo 15 chunks por fuente para no saturar
+        docs_batch, metas_batch, ids_batch = [], [], []
+        for chunk in chunks:
+            docs_batch.append(chunk)
+            metas_batch.append({
+                "source_url":      url,
+                "titulo":          titulo[:200],
+                "query":           query_original[:200],
+                "fecha_indexado":  str(_date.today()),
+                "source":          titulo[:100],  # para _extraer_fuentes
+                "tool_origen":     nombre_tool,
+            })
+            ids_batch.append(str(uuid.uuid4()))
+
+        try:
+            embeddings = embedding_fn.embed_documents(docs_batch)
+            conocimiento_col.add(
+                documents=docs_batch,
+                metadatas=metas_batch,
+                ids=ids_batch,
+                embeddings=embeddings,
+            )
+            total_indexados += len(docs_batch)
+            print(f"🧠 [APRENDIZAJE] +{len(docs_batch)} fragmentos ← {url[:70]}")
+        except Exception as e:
+            print(f"⚠️ [APRENDIZAJE] Error indexando {url}: {e}")
+
+    return total_indexados
+
+
+# ---------------------------------------------------------------------------
 # Lógica principal de procesamiento
 # ---------------------------------------------------------------------------
 
@@ -375,23 +532,34 @@ def procesar_y_añadir(file_path: str, perfil: str, nombre_original: str = None)
     """
     print(f"🚀 [DEBUG] Iniciando proceso — perfil: {perfil}, archivo: {file_path}")
 
+    # Resolución temprana del nombre para chunking inteligente y metadatos
+    nombre_archivo = nombre_original if nombre_original else os.path.basename(file_path)
+
     texto = _extraer_texto(file_path)
 
     if not texto or not texto.strip():
         print(f"⚠️ [DEBUG] Sin contenido extraído de {file_path}. Abortando.")
         return 0
 
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1500,
-        chunk_overlap=300,  # solapamiento aumentado para no perder contexto entre chunks
-    )
+    # Chunking inteligente: separadores legales para documentos normativos
+    if _es_documento_legal(nombre_archivo):
+        print("   ⚖️  Documento legal detectado: usando separadores de artículos.")
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1500,
+            chunk_overlap=300,
+            separators=_SEPARADORES_LEGALES,
+        )
+    else:
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1500,
+            chunk_overlap=300,
+        )
     print("✂️ [DEBUG] Fragmentando texto...")
     raw_chunks = text_splitter.split_text(texto)
     # Filtramos fragmentos vacíos o que solo contengan espacios
     chunks = [c for c in raw_chunks if c.strip()]
     print(f"   {len(chunks)} fragmentos válidos generados (de {len(raw_chunks)} originales).")
 
-    nombre_archivo = nombre_original if nombre_original else os.path.basename(file_path)
     nombre_coleccion = _PERFIL_A_COLECCION[perfil]
 
     documents = []
@@ -471,6 +639,104 @@ def procesar_y_añadir(file_path: str, perfil: str, nombre_original: str = None)
         raise
 
     return total
+
+# ---------------------------------------------------------------------------
+# Carga masiva inicial de documentos legislativos (seed al arrancar)
+# ---------------------------------------------------------------------------
+
+#: Ruta por defecto de la carpeta de legislación.
+RUTA_LEGISLACION_DEFAULT = os.path.join(current_dir, "legislacion")
+
+#: Extensiones de archivo soportadas para el seed.
+_EXTENSIONES_SEED = {".pdf", ".txt", ".md"}
+
+
+def seed_legislacion_folder(carpeta: str = None) -> dict:
+    """
+    Carga masiva de documentos legislativos desde ``data/legislacion/``.
+
+    - Escanea la carpeta en busca de PDFs, TXTs y MDs.
+    - Salta los archivos que ya estén indexados en ``conocimiento_web``
+      (deduplicación por nombre de archivo en metadato ``source``).
+    - Indexa los nuevos en la colección ``conocimiento_web`` usando el
+      chunking legal inteligente de ``procesar_y_añadir``.
+
+    Llamada automáticamente en el lifespan de ``main.py`` y manualmente
+    desde el script CLI ``seed_legislacion.py``.
+
+    Returns
+    -------
+    dict
+        ``{'docs_nuevos': int, 'fragmentos': int, 'omitidos': int, 'errores': int}``
+    """
+    carpeta = carpeta or RUTA_LEGISLACION_DEFAULT
+
+    # Crear la carpeta si no existe (primer despliegue)
+    if not os.path.isdir(carpeta):
+        print(f"ℹ️ [SEED] Carpeta de legislación no encontrada: {carpeta}. Creando...")
+        os.makedirs(carpeta, exist_ok=True)
+        return {"docs_nuevos": 0, "fragmentos": 0, "omitidos": 0, "errores": 0}
+
+    archivos = sorted(
+        f for f in os.listdir(carpeta)
+        if os.path.splitext(f)[1].lower() in _EXTENSIONES_SEED
+    )
+
+    if not archivos:
+        print(f"ℹ️ [SEED] Carpeta de legislación vacía: {carpeta}")
+        return {"docs_nuevos": 0, "fragmentos": 0, "omitidos": 0, "errores": 0}
+
+    print(f"\n📚 [SEED] {len(archivos)} documento(s) encontrado(s) en {carpeta}")
+
+    # Nombres de archivo ya presentes en conocimiento_web
+    col = _get_fresh_collection(_COLECCION_CONOCIMIENTO)
+    try:
+        existing_data = col.get(include=["metadatas"])
+        ya_indexados: set[str] = {
+            os.path.basename(str(m["source"]))
+            for m in existing_data.get("metadatas", [])
+            if m and "source" in m
+        }
+        print(f"   📂 Archivos ya indexados en conocimiento_web: {len(ya_indexados)}")
+    except Exception as e:
+        print(f"⚠️ [SEED] No se pudo verificar duplicados: {e}. Se reindexarán todos.")
+        ya_indexados = set()
+
+    docs_nuevos = fragmentos = omitidos = errores = 0
+
+    for nombre_archivo in archivos:
+        if nombre_archivo in ya_indexados:
+            print(f"   ⏭️  Omitido (ya indexado): {nombre_archivo}")
+            omitidos += 1
+            continue
+
+        ruta = os.path.join(carpeta, nombre_archivo)
+        print(f"\n   📄 [{archivos.index(nombre_archivo)+1}/{len(archivos)}] {nombre_archivo}")
+        try:
+            n = procesar_y_añadir(ruta, "conocimiento", nombre_archivo)
+            if n > 0:
+                print(f"   ✅ {nombre_archivo}: {n} fragmentos indexados")
+                docs_nuevos += 1
+                fragmentos += n
+            else:
+                print(f"   ⚠️  {nombre_archivo}: sin fragmentos (texto vacío o no extraíble)")
+                errores += 1
+        except Exception as e:
+            print(f"   ❌ Error indexando {nombre_archivo}: {e}")
+            errores += 1
+
+    print(
+        f"\n📊 [SEED] Completado — "
+        f"{docs_nuevos} docs nuevos · {fragmentos} fragmentos · "
+        f"{omitidos} omitidos · {errores} errores"
+    )
+    return {
+        "docs_nuevos": docs_nuevos,
+        "fragmentos": fragmentos,
+        "omitidos": omitidos,
+        "errores": errores,
+    }
+
 
 # ---------------------------------------------------------------------------
 # API pública — usada por RagService
