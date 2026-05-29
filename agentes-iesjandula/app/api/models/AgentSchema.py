@@ -8,3 +8,4 @@ class ConsultaRequest(BaseModel):
 
 class ConsultaResponse(BaseModel):
     respuesta: str
+    fuentes:   list[str] = Field(default_factory=list, description="Documentos fuente utilizados para generar la respuesta")

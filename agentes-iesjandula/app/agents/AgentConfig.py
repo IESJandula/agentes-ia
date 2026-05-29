@@ -15,14 +15,43 @@ from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import MemorySaver
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 import os
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Checkpointer persistente (SQLite) con fallback a MemorySaver
+# ─────────────────────────────────────────────────────────────────────────────
+_checkpointer = None
+
+def _get_checkpointer():
+    """Devuelve un checkpointer SQLite si está disponible, si no MemorySaver."""
+    global _checkpointer
+    if _checkpointer is not None:
+        return _checkpointer
+    try:
+        from langgraph.checkpoint.sqlite import SqliteSaver
+        _db_dir  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data")
+        _db_path = os.path.join(_db_dir, "checkpoints.db")
+        os.makedirs(_db_dir, exist_ok=True)
+        _checkpointer = SqliteSaver.from_conn_string(_db_path)
+        print(f"✅ [MEMORIA] Conversaciones persistentes (SQLite: {_db_path})")
+    except Exception as e:
+        print(f"⚠️  [MEMORIA] SqliteSaver no disponible ({e}). Usando MemorySaver (sin persistencia).")
+        _checkpointer = MemorySaver()
+    return _checkpointer
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper: retry con backoff para rate-limit 429 de Gemini (free tier: 5 rpm)
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def _llm_invoke_con_retry(llm, mensajes, max_intentos: int = 4, espera_base: float = 20.0):
+async def _llm_invoke_con_retry(
+    llm,
+    mensajes,
+    config: RunnableConfig | None = None,
+    max_intentos: int = 4,
+    espera_base: float = 20.0,
+):
     """
     Llama a llm.ainvoke(mensajes) con reintentos automáticos ante 429 RESOURCE_EXHAUSTED.
 
@@ -33,6 +62,8 @@ async def _llm_invoke_con_retry(llm, mensajes, max_intentos: int = 4, espera_bas
     import re as _re
     for intento in range(1, max_intentos + 1):
         try:
+            if config is not None:
+                return await llm.ainvoke(mensajes, config=config)
             return await llm.ainvoke(mensajes)
         except Exception as e:
             err = str(e)
@@ -59,8 +90,10 @@ async def _llm_invoke_con_retry(llm, mensajes, max_intentos: int = 4, espera_bas
             else:
                 raise  # agotados los reintentos
 
-from app.tools import obtener_tools_publicas, obtener_tools_profesorado
-from .prompts.prompt_manager import PROMPTS, BEHAVIOR_PUBLIC, BEHAVIOR_TEACHER, REGLAS_VOZ
+from app.tools import obtener_tools_publicas, obtener_tools_profesorado, obtener_tools_legislacion
+from .prompts.prompt_manager import (
+    PROMPTS, BEHAVIOR_PUBLIC, BEHAVIOR_TEACHER, BEHAVIOR_LEGISLATION, REGLAS_VOZ
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -69,7 +102,7 @@ from .prompts.prompt_manager import PROMPTS, BEHAVIOR_PUBLIC, BEHAVIOR_TEACHER, 
 
 class Estado(TypedDict):
     messages:      Annotated[list, add_messages]
-    tipo_consulta: Literal["publica", "profesorado"] | None
+    tipo_consulta: Literal["publica", "profesorado", "legislacion"] | None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -79,17 +112,20 @@ class Estado(TypedDict):
 async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
 
     # ── 1. Tools por fuente ──────────────────────────────────────────────────
-    tools_pub  = await obtener_tools_publicas()
-    tools_prof = await obtener_tools_profesorado() if perfil == "profesores" else []
+    tools_pub   = await obtener_tools_publicas()
+    tools_prof  = await obtener_tools_profesorado() if perfil == "profesores" else []
+    tools_legis = await obtener_tools_legislacion()
 
-    map_pub  = {t.name: t for t in tools_pub}
-    map_prof = {t.name: t for t in tools_prof}
-    map_todo = {**map_pub, **map_prof}
+    map_pub   = {t.name: t for t in tools_pub}
+    map_prof  = {t.name: t for t in tools_prof}
+    map_legis = {t.name: t for t in tools_legis}
+    map_todo  = {**map_pub, **map_prof, **map_legis}
 
     # ── 2. Prompts ───────────────────────────────────────────────────────────
     _voz_suffix  = REGLAS_VOZ if es_voz else ""
-    PROMPT_PUB  = PROMPTS[perfil] + "\n\n" + BEHAVIOR_PUBLIC  + _voz_suffix
-    PROMPT_PROF = PROMPTS[perfil] + "\n\n" + BEHAVIOR_TEACHER + _voz_suffix
+    PROMPT_PUB   = PROMPTS[perfil] + "\n\n" + BEHAVIOR_PUBLIC       + _voz_suffix
+    PROMPT_PROF  = PROMPTS[perfil] + "\n\n" + BEHAVIOR_TEACHER      + _voz_suffix
+    PROMPT_LEGIS = PROMPTS[perfil] + "\n\n" + BEHAVIOR_LEGISLATION  + _voz_suffix
 
     # ── 3. LLMs ─────────────────────────────────────────────────────────────
     # Modelo configurable por variable de entorno para facilitar el cambio.
@@ -106,10 +142,12 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
         model=_model_name,
         temperature=0.4,
         max_retries=3,
+        streaming=True,
     )
-    llm_clasif = _base_llm                                      # sin tools
-    llm_pub    = _base_llm.bind_tools(tools_pub) if tools_pub else _base_llm
-    llm_prof   = _base_llm.bind_tools(tools_prof) if tools_prof else _base_llm
+    llm_clasif = _base_llm                                                          # sin tools
+    llm_pub    = _base_llm.bind_tools(tools_pub)   if tools_pub   else _base_llm
+    llm_prof   = _base_llm.bind_tools(tools_prof)  if tools_prof  else _base_llm
+    llm_legis  = _base_llm.bind_tools(tools_legis) if tools_legis else _base_llm
 
     # ─────────────────────────────────────────────────────────────────────────
     # Nodos
@@ -161,7 +199,7 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
         return contexto
 
     # ── Clasificador ─────────────────────────────────────────────────────────
-    async def clasificar(estado: Estado) -> dict:
+    async def clasificar(estado: Estado, config: RunnableConfig) -> dict:
         """Decide si la consulta es pública o interna de profesorado."""
         if perfil != "profesores" or not tools_prof:
             return {"tipo_consulta": "publica"}
@@ -170,42 +208,47 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
         texto  = ultimo.content if hasattr(ultimo, "content") else str(ultimo)
 
         sys_clasificador = SystemMessage(content="""Eres un sistema de enrutamiento estricto para el IES Jándula.
-Tu ÚNICA función es clasificar la consulta del usuario en una de estas dos categorías.
+Tu ÚNICA función es clasificar la consulta del usuario en una de estas TRES categorías.
+
+CATEGORÍA 'legislacion' (normativa y leyes educativas):
+- Leyes educativas nacionales: LOMLOE, LOE, LOGSE, Estatuto Docente, Ley FP 3/2022.
+- Decretos u órdenes de la Junta de Andalucía sobre educación, evaluación o currículo.
+- Instrucciones de inicio de curso de la Consejería de Educación.
+- Normativa sobre evaluación, titulación, acceso a ciclos formativos o universidad.
+- Derechos y deberes legales del profesorado o del alumnado (marco legislativo).
+- Convocatorias de oposiciones o concursos docentes (BOE/BOJA).
+- Cualquier pregunta que empiece con "¿Qué dice la ley...", "¿Está regulado...", "¿Cuál es la normativa...".
 
 CATEGORÍA 'profesorado' (información INTERNA del centro):
-- Nombres ESPECÍFICOS de profesores, tutores o jefes de departamento (ej: "¿quién es Juan García?").
-- Cargos del EQUIPO DIRECTIVO: directora, jefe de estudios, secretario/a (ej: "¿quién es la directora?").
-- Documentación interna: planes (acogida, igualdad), protocolos (incendio, accidentes), normativa interna (NOF, PEC, ROF, actas).
-- Gestión docente: guardias, Séneca, partes de incidencias, sustituciones, reuniones de departamento, horarios de profesores.
+- Nombres ESPECÍFICOS de profesores, tutores o jefes de departamento.
+- Cargos del EQUIPO DIRECTIVO: directora, jefe de estudios, secretario/a.
+- Documentación interna: planes (acogida, igualdad), protocolos (incendio, accidentes), NOF, PEC, ROF, actas.
+- Gestión docente: guardias, Séneca, partes de incidencias, sustituciones, reuniones de departamento.
 
 CATEGORÍA 'publica' (información accesible en la web del centro):
-- TODO sobre ciclos formativos, FP, grados superiores/medios, ESO, Bachillerato (descripción, asignaturas, requisitos, salidas profesionales).
-- Ejemplos: "ciclo de desarrollo de aplicaciones web", "CFGS DAW", "FP de informática", "grado medio de gestión administrativa".
+- Todo sobre ciclos formativos, FP, ESO, Bachillerato (descripción, asignaturas, requisitos, salidas).
 - Noticias, eventos, calendario escolar, actividades extraescolares, clubes.
 - Trámites: secretaría, matrículas, becas, plazos de admisión, listas de admitidos.
 - Servicios: comedor, transporte, biblioteca, horarios generales.
 
-CASOS ESPECIALES - SIEMPRE SON 'publica':
-- Cualquier pregunta sobre ciclos formativos (FP, CFGS, CFGM) → 'publica'
-- "Dame información sobre..." + nombre de ciclo/curso → 'publica'
-- "Qué asignaturas tiene..." → 'publica'
-- "Requisitos para acceder a..." → 'publica'
-
 REGLAS DE ORO:
-1. Responde ÚNICAMENTE con la palabra 'profesorado' o 'publica'.
-2. NO des explicaciones. NO pidas disculpas. NO digas que no tienes acceso.
-3. Si pregunta por el NOMBRE de la directora/jefe estudios/secretario → 'profesorado'.
-4. Si pregunta por INFORMACIÓN ACADÉMICA (ciclos, FP, asignaturas, cursos) → 'publica'.
-5. En caso de duda, elige 'publica'.
-6. TU RESPUESTA DEBE SER SOLO UNA PALABRA.""")
+1. Responde ÚNICAMENTE con una de estas palabras: 'legislacion', 'profesorado' o 'publica'.
+2. NO des explicaciones ni pidas disculpas.
+3. Si pregunta por una ley, decreto, orden, LOMLOE, BOE, BOJA → 'legislacion'.
+4. Si pregunta por el NOMBRE de un cargo directivo o normativa INTERNA del centro → 'profesorado'.
+5. Si pregunta por INFORMACIÓN ACADÉMICA PÚBLICA (ciclos, FP, matrículas) → 'publica'.
+6. En caso de duda entre 'legislacion' y 'profesorado' → 'legislacion'.
+7. En caso de duda general → 'publica'.
+8. TU RESPUESTA DEBE SER SOLO UNA PALABRA.""")
 
-        respuesta = await _llm_invoke_con_retry(llm_clasif, [sys_clasificador, HumanMessage(content=texto)])
+        respuesta = await _llm_invoke_con_retry(llm_clasif, [sys_clasificador, HumanMessage(content=texto)], config=config)
         raw = _extract_text(respuesta.content).strip().lower()
 
-        # Detectar "publica" primero (incluye variantes con/sin tilde)
-        # porque la palabra "profesorado" contiene "profesor" como substring
-        if any(x in raw for x in ["publica", "pública"]):
-            tipo: Literal["publica", "profesorado"] = "publica"
+        # Detectar categoría — orden importante: legislacion > profesorado > publica
+        if any(x in raw for x in ["legislacion", "legislación", "legal", "normativa"]):
+            tipo: Literal["publica", "profesorado", "legislacion"] = "legislacion"
+        elif any(x in raw for x in ["publica", "pública"]):
+            tipo = "publica"
         elif any(x in raw for x in ["profesorado", "docente", "interna"]):
             tipo = "profesorado"
         else:
@@ -215,7 +258,7 @@ REGLAS DE ORO:
         return {"tipo_consulta": tipo}
 
     # ── Chatbot público ───────────────────────────────────────────────────────
-    async def chatbot_publico(estado: Estado) -> dict:
+    async def chatbot_publico(estado: Estado, config: RunnableConfig) -> dict:
         # Poda de historial inteligente: no cortamos en medio de una cadena Tool -> AI
         mensajes = estado["messages"]
         if len(mensajes) > 12:
@@ -232,7 +275,7 @@ REGLAS DE ORO:
         
         # Google requiere que el primer mensaje tras el System sea un HumanMessage
         # o que la secuencia sea coherente.
-        respuesta = await _llm_invoke_con_retry(llm_pub, [system] + mensajes)
+        respuesta = await _llm_invoke_con_retry(llm_pub, [system] + mensajes, config=config)
 
         # ── GUARDRAIL: forzar búsqueda si el LLM no llamó herramientas y no hay contexto ──
         has_context = any(isinstance(m, ToolMessage) for m in mensajes[-3:])
@@ -251,8 +294,40 @@ REGLAS DE ORO:
 
         return {"messages": [respuesta]}
 
+    # ── Chatbot legislación ───────────────────────────────────────────────────
+    async def chatbot_legislacion(estado: Estado, config: RunnableConfig) -> dict:
+        mensajes = estado["messages"]
+        if len(mensajes) > 12:
+            for i in range(len(mensajes) - 12, len(mensajes)):
+                if isinstance(mensajes[i], HumanMessage):
+                    mensajes = mensajes[i:]
+                    break
+            else:
+                mensajes = mensajes[-10:]
+
+        tool_context = _build_tool_context(estado)
+        system = SystemMessage(content=PROMPT_LEGIS + tool_context)
+        respuesta = await _llm_invoke_con_retry(llm_legis, [system] + mensajes, config=config)
+
+        # Guardrail: si no llamó herramientas y no hay contexto, forzar búsqueda legislativa
+        has_context = any(isinstance(m, ToolMessage) for m in mensajes[-3:])
+        if not getattr(respuesta, "tool_calls", None) and not has_context:
+            query_usuario = _ultimo_mensaje_usuario(estado)
+            if query_usuario and not _es_saludo(query_usuario):
+                print(f"⚠️ [GUARDRAIL] Forzando búsqueda legislativa: '{query_usuario}'")
+                respuesta = AIMessage(
+                    content="",
+                    tool_calls=[{
+                        "id": f"forced_{uuid.uuid4().hex[:8]}",
+                        "name": "busqueda_legislacion_educativa",
+                        "args": {"query": query_usuario + " normativa educativa España 2025"},
+                    }],
+                )
+
+        return {"messages": [respuesta]}
+
     # ── Chatbot profesorado ───────────────────────────────────────────────────
-    async def chatbot_profesorado(estado: Estado) -> dict:
+    async def chatbot_profesorado(estado: Estado, config: RunnableConfig) -> dict:
         # Poda de historial inteligente
         mensajes = estado["messages"]
         if len(mensajes) > 12:
@@ -265,7 +340,7 @@ REGLAS DE ORO:
 
         tool_context = _build_tool_context(estado)
         system = SystemMessage(content=PROMPT_PROF + tool_context)
-        respuesta = await _llm_invoke_con_retry(llm_prof, [system] + mensajes)
+        respuesta = await _llm_invoke_con_retry(llm_prof, [system] + mensajes, config=config)
 
         # ── GUARDRAIL: forzar búsqueda si el LLM no llamó herramientas y no hay contexto ──
         has_context = any(isinstance(m, ToolMessage) for m in mensajes[-3:])
@@ -284,36 +359,62 @@ REGLAS DE ORO:
 
         return {"messages": [respuesta]}
 
-    # ── Ejecutor de tools ─────────────────────────────────────────────────────
+    # ── Ejecutor de tools (paralelo + timeout + auto-aprendizaje) ────────────
+    _TOOL_TIMEOUT = float(os.getenv("TOOL_TIMEOUT_SECONDS", "15"))
+    # Tools cuyo output se auto-indexa en ChromaDB para aprendizaje continuo
+    _TOOLS_AUTOLEARN = {"busqueda_legislacion_educativa", "busqueda_web_general"}
+
     async def ejecutar_tools(estado: Estado) -> dict:
         ultimo  = estado["messages"][-1]
         tipo    = estado.get("tipo_consulta", "publica")
-        mapa    = map_prof if tipo == "profesorado" else map_pub
+        if tipo == "profesorado":
+            mapa = map_prof
+        elif tipo == "legislacion":
+            mapa = map_legis
+        else:
+            mapa = map_pub
 
-        results = []
-        for call in ultimo.tool_calls:
+        async def _run_single(call: dict) -> ToolMessage:
             nombre = call["name"]
+            if nombre not in mapa:
+                obs = (
+                    f"⚠️ La herramienta '{nombre}' no está disponible "
+                    f"en la rama '{tipo}'. Usa solo las herramientas permitidas."
+                )
+                return ToolMessage(content=obs, tool_call_id=call["id"], name=nombre)
             try:
-                if nombre not in mapa:
-                    # Guardrail: tool fuera de la rama activa
-                    obs = (
-                        f"⚠️ La herramienta '{nombre}' no está disponible "
-                        f"en la rama '{tipo}'. Usa solo las herramientas permitidas."
-                    )
-                else:
-                    print(f"\n🛠️  [EJECUTANDO TOOL: {nombre}] con args: {call['args']}")
-                    obs = await mapa[nombre].ainvoke(call["args"])
-                    print(f"   ✅ [TOOL {nombre} COMPLETADA] Respuesta (truncada): {str(obs)[:300]}...")
-            except Exception as e:
-                print(f"   ❌ [ERROR EN TOOL {nombre}]: {e}")
-                obs = f"Error en herramienta '{nombre}': {e}"
+                print(f"\n🛠️  [TOOL: {nombre}] args={call['args']}")
+                obs = await asyncio.wait_for(
+                    mapa[nombre].ainvoke(call["args"]),
+                    timeout=_TOOL_TIMEOUT,
+                )
+                print(f"   ✅ [TOOL {nombre}] OK — {len(str(obs))} chars")
 
-            results.append(ToolMessage(
-                content=str(obs),
-                tool_call_id=call["id"],
-                name=nombre,
-            ))
-        return {"messages": results}
+                # Auto-aprendizaje: indexar resultados de búsquedas web en background
+                obs_str = str(obs)
+                if nombre in _TOOLS_AUTOLEARN and len(obs_str) > 500:
+                    query = call["args"].get("query", call["args"].get("search", ""))
+                    async def _autolearn(content=obs_str, q=query, n=nombre):
+                        try:
+                            from data.data import auto_indexar_resultado_web
+                            n_chunks = auto_indexar_resultado_web(content, q, n)
+                            if n_chunks:
+                                print(f"   🧠 [AUTO-LEARN] {n_chunks} nuevos fragmentos indexados.")
+                        except Exception as ae:
+                            print(f"   ⚠️ [AUTO-LEARN] {ae}")
+                    asyncio.create_task(_autolearn())
+
+            except asyncio.TimeoutError:
+                print(f"   ⏱️  [TOOL {nombre}] Timeout tras {_TOOL_TIMEOUT}s")
+                obs = f"⚠️ La herramienta '{nombre}' tardó demasiado (>{_TOOL_TIMEOUT}s). Intenta reformular la pregunta."
+            except Exception as e:
+                print(f"   ❌ [TOOL {nombre}] Error: {e}")
+                obs = f"Error en herramienta '{nombre}': {e}"
+            return ToolMessage(content=str(obs), tool_call_id=call["id"], name=nombre)
+
+        # Ejecutar todas las tool_calls en paralelo
+        results = await asyncio.gather(*[_run_single(c) for c in ultimo.tool_calls])
+        return {"messages": list(results)}
 
     # ─────────────────────────────────────────────────────────────────────────
     # Routing
@@ -332,6 +433,9 @@ REGLAS DE ORO:
     def route_chatbot_profesorado(estado: Estado) -> str:
         return "tools" if _hay_tool_calls(estado) else END
 
+    def route_chatbot_legislacion(estado: Estado) -> str:
+        return "tools" if _hay_tool_calls(estado) else END
+
     def route_tras_tools(estado: Estado) -> str:
         """Vuelve al chatbot correcto según la rama activa."""
         return estado.get("tipo_consulta", "publica")
@@ -345,6 +449,7 @@ REGLAS DE ORO:
     builder.add_node("clasificar",           clasificar)
     builder.add_node("chatbot_publico",      chatbot_publico)
     builder.add_node("chatbot_profesorado",  chatbot_profesorado)
+    builder.add_node("chatbot_legislacion",  chatbot_legislacion)
     builder.add_node("tools",                ejecutar_tools)
 
     builder.add_edge(START, "clasificar")
@@ -355,6 +460,7 @@ REGLAS DE ORO:
         {
             "publica":      "chatbot_publico",
             "profesorado":  "chatbot_profesorado",
+            "legislacion":  "chatbot_legislacion",
         },
     )
 
@@ -371,15 +477,22 @@ REGLAS DE ORO:
     )
 
     builder.add_conditional_edges(
+        "chatbot_legislacion",
+        route_chatbot_legislacion,
+        {"tools": "tools", END: END},
+    )
+
+    builder.add_conditional_edges(
         "tools",
         route_tras_tools,
         {
             "publica":      "chatbot_publico",
             "profesorado":  "chatbot_profesorado",
+            "legislacion":  "chatbot_legislacion",
         },
     )
 
-    grafo = builder.compile(checkpointer=MemorySaver())
+    grafo = builder.compile(checkpointer=_get_checkpointer())
     # recursion_limit reducido: 15 ciclos son más que suficientes
     # y protegen contra bucles infinitos de tool-calling
 
