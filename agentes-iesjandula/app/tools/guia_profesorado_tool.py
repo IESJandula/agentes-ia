@@ -1,5 +1,5 @@
 from langchain_core.tools import tool
-from data.data import profesores_col, query_coleccion
+from data.data import obtener_coleccion, query_coleccion
 
 
 @tool
@@ -29,7 +29,7 @@ def guia_profesorado(search: str) -> str:
     print(f"\n📋 [TOOL: guia_profesorado] Query: {search}")
 
     resultados = query_coleccion(
-        profesores_col,
+        obtener_coleccion("profesores"),
         query=search,
         n_results=8,
         include=["documents", "metadatas", "distances"],

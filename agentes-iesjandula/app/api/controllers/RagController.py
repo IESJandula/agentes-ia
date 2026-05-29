@@ -1,14 +1,15 @@
 from fastapi import HTTPException, UploadFile
+from typing import List
 from app.api.services.RagService import rag_service
 
 class RagController:
     @staticmethod
-    async def upload_document(perfil: str, file: UploadFile):
+    async def upload_documents(perfil: str, files: List[UploadFile]):
         if not rag_service.validar_perfil(perfil):
             raise HTTPException(status_code=400, detail="Perfil no válido.")
-        
+
         try:
-            return await rag_service.procesar_subida(perfil, file)
+            return await rag_service.procesar_subida_multiple(perfil, files)
         except ValueError as ve:
             raise HTTPException(status_code=400, detail=str(ve))
         except Exception as e:

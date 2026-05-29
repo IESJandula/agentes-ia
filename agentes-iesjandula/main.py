@@ -14,15 +14,25 @@ import os
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 from app.api.routes.AgentRoutes import router as agent_router
 from app.api.routes.RagRoutes import router as rag_router
-from app.api.services.AgenteService import agents_service  
-from data.data import inicializar_bases_datos
+from app.api.routes.AdminRoutes import router as admin_router
+from app.api.services.AgenteService import agents_service
+from data.data import inicializar_bases_datos, seed_legislacion_folder
 
 load_dotenv()
+
+async def _seed_task():
+    """Tarea en background: indexa documentos de data/legislacion/ al arrancar."""
+    try:
+        await asyncio.to_thread(seed_legislacion_folder)
+    except Exception as e:
+        print(f"⚠️ [SEED] Error en tarea de seed de legislación: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,8 +43,11 @@ async def lifespan(app: FastAPI):
         print("📊 Cargando/Verificando Bases de Datos RAG...")
         inicializar_bases_datos()
 
+        print("📚 Lanzando seed de legislación en segundo plano...")
+        asyncio.create_task(_seed_task())
+
         print("🚀 Inicializando Cerebro del Agente (Modo Texto/Profesores)...")
-        await agents_service.procesar_chat("Hola", perfil="profesores") 
+        await agents_service.procesar_chat("Hola", perfil="profesores")
         print("✅ Sistema listo para recibir consultas.")
     except Exception as e:
         print(f"⚠️ Nota: El pre-calentamiento falló, pero la app arrancará: {e}")
@@ -49,6 +62,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Comprimir respuestas de texto (JSON, SSE, HTML) — ~70% menos ancho de banda
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # Configurar CORS
 app.add_middleware(
@@ -65,6 +81,7 @@ from fastapi.staticfiles import StaticFiles
 # Incluir rutas con prefijos claros para evitar colisiones
 app.include_router(agent_router, prefix="/api")
 app.include_router(rag_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 
 @app.get("/api")
 async def api_root():
@@ -88,6 +105,13 @@ async def serve_index():
         "mensaje": "Frontend no encontrado. Coloca tu archivo index.html en la raíz del proyecto.",
         "api_docs": "/docs"
     }
+
+@app.get("/admin")
+async def serve_admin():
+    """Sirve el panel de administración."""
+    if os.path.exists("admin.html"):
+        return FileResponse("admin.html")
+    return {"mensaje": "Panel de administración no encontrado."}
 
 if __name__ == "__main__":
     import os

@@ -65,3 +65,11 @@ htmlcov/
 
 *.onnx
 *.bin
+
+# --- Legislación (PDFs grandes — se cargan en el servidor, no van en git) ---
+data/legislacion/*.pdf
+data/legislacion/*.PDF
+
+# --- Runtime / Stats ---
+data/usage_stats.json
+data/checkpoints.db
