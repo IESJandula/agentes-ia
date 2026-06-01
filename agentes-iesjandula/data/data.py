@@ -770,25 +770,36 @@ def listar_documentos_en_coleccion(perfil: str) -> list[str]:
     """
     Devuelve una lista ordenada de nombres de archivo únicos presentes
     en la colección del perfil indicado.
+
+    Usa SQLite directo para evitar cargar el índice HNSW completo en memoria
+    (collection.get() con 40k+ embeddings bloquea varios minutos).
     """
-    coleccion = obtener_coleccion(perfil)
-    
-    # Obtenemos TODOS los metadatos sin límite (limit=None o un número muy alto)
-    # Algunas versiones de Chroma requieren un número explícito si no se quiere límite
-    resultado = coleccion.get(include=["metadatas"])
-
-    if not resultado or not resultado.get("metadatas"):
-        return []
-
-    archivos = set()
-    for meta in resultado["metadatas"]:
-        if meta and "source" in meta:
-            # Normalizamos el nombre: solo el nombre del archivo, sin rutas
-            nombre = os.path.basename(str(meta["source"]))
+    try:
+        import sqlite3 as _sq
+        _c = _sq.connect(os.path.join(persist_db_path, "chroma.sqlite3"), timeout=10)
+        rows = _c.execute(
+            "SELECT DISTINCT string_value FROM embedding_metadata WHERE key='source'"
+        ).fetchall()
+        _c.close()
+        archivos = set()
+        for (val,) in rows:
+            nombre = os.path.basename(str(val))
             if nombre:
                 archivos.add(nombre)
-    
-    return sorted(list(archivos))
+        return sorted(list(archivos))
+    except Exception:
+        # Fallback: usar ChromaDB (lento con colecciones grandes)
+        coleccion = obtener_coleccion(perfil)
+        resultado = coleccion.get(include=["metadatas"])
+        if not resultado or not resultado.get("metadatas"):
+            return []
+        archivos = set()
+        for meta in resultado["metadatas"]:
+            if meta and "source" in meta:
+                nombre = os.path.basename(str(meta["source"]))
+                if nombre:
+                    archivos.add(nombre)
+        return sorted(list(archivos))
 
 
 def eliminar_documento_de_coleccion(perfil: str, nombre_archivo: str) -> dict:
