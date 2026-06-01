@@ -1381,11 +1381,15 @@
       if (herramientaActiva) {
         const iconos = {
           guia_profesorado: '📋', guia_alumnado: '📚',
+          busqueda_legislacion_educativa: '⚖️',
+          consultar_conocimiento_aprendido: '🧠',
           busqueda_web_ies_jandula: '🌐', busqueda_web_general: '🔍',
           extraer_contenido_web: '📄'
         };
         const icono = iconos[herramientaActiva] || '🔧';
-        content.innerHTML = `<p class="tool-thinking">${icono} Consultando ${herramientaActiva.replace(/_/g, ' ')}...</p>`;
+        const nombre = herramientaActiva.replace(/_/g, ' ');
+        // Mostrar indicador de herramienta SIN borrar texto previo
+        content.innerHTML = `<p class="tool-thinking">${icono} Consultando ${nombre}…</p>`;
       } else if (textoAcumulado) {
         const rawHtml = marked.parse(textoAcumulado);
         content.innerHTML = DOMPurify.sanitize(rawHtml);
@@ -1488,11 +1492,16 @@
 
               if (evento.tipo === 'herramienta') {
                 herramientaActiva = evento.nombre;
-                textoAcumulado = '';
-                updateStreamingMessage(streamDiv, '', herramientaActiva);
+                // NO borramos textoAcumulado: si había texto previo lo
+                // reemplazamos solo visualmente con el indicador de herramienta.
+                updateStreamingMessage(streamDiv, textoAcumulado, herramientaActiva);
 
               } else if (evento.tipo === 'token') {
-                herramientaActiva = null;
+                if (herramientaActiva) {
+                  // Primer token tras una herramienta: la respuesta final empieza aquí
+                  textoAcumulado = '';
+                  herramientaActiva = null;
+                }
                 textoAcumulado += evento.texto;
                 updateStreamingMessage(streamDiv, textoAcumulado, null);
 
