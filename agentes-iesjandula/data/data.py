@@ -212,11 +212,23 @@ profesores_col  = _crear_o_recrear_coleccion(_COLECCION_PROFESORES,   embedding_
 alumnos_col     = _crear_o_recrear_coleccion(_COLECCION_ALUMNOS,      embedding_fn)
 conocimiento_col = _crear_o_recrear_coleccion(_COLECCION_CONOCIMIENTO, embedding_fn)
 
-# Debug: Mostrar conteo al iniciar
+# Debug: Mostrar conteo al iniciar.
+# Para conocimiento_web usamos SQLite directo: .count() carga el índice HNSW
+# completo en memoria (bloquea el arranque varios minutos con 40k+ embeddings).
+def _contar_embeddings_sqlite(db_path: str) -> int:
+    try:
+        import sqlite3 as _sq
+        _c = _sq.connect(os.path.join(db_path, "chroma.sqlite3"), timeout=5)
+        n = _c.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+        _c.close()
+        return n
+    except Exception:
+        return -1
+
 print(f"📊 [DATABASE] Versión: {os.path.basename(persist_db_path)}")
 print(f"📊 [DATABASE] Documentos en Profesores:   {profesores_col.count()}")
 print(f"📊 [DATABASE] Documentos en Alumnos:      {alumnos_col.count()}")
-print(f"📊 [DATABASE] Conocimiento web aprendido: {conocimiento_col.count()}")
+print(f"📊 [DATABASE] Conocimiento web aprendido: {_contar_embeddings_sqlite(persist_db_path)}")
 
 # ---------------------------------------------------------------------------
 # Helpers internos
