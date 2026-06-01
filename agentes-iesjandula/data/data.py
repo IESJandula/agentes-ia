@@ -700,19 +700,23 @@ def seed_legislacion_folder(carpeta: str = None) -> dict:
 
     print(f"\n📚 [SEED] {len(archivos)} documento(s) encontrado(s) en {carpeta}")
 
-    # Nombres de archivo ya presentes en conocimiento_web
-    col = _get_fresh_collection(_COLECCION_CONOCIMIENTO)
+    # Nombres de archivo ya presentes en conocimiento_web.
+    # Usamos SQLite directo para evitar cargar el índice HNSW completo
+    # (col.get() con 40k+ embeddings bloquea varios minutos).
+    ya_indexados: set[str] = set()
     try:
-        existing_data = col.get(include=["metadatas"])
-        ya_indexados: set[str] = {
-            os.path.basename(str(m["source"]))
-            for m in existing_data.get("metadatas", [])
-            if m and "source" in m
-        }
-        print(f"   📂 Archivos ya indexados en conocimiento_web: {len(ya_indexados)}")
+        import sqlite3 as _sq
+        _db = os.path.join(persist_db_path, "chroma.sqlite3")
+        _c = _sq.connect(_db, timeout=15)
+        rows = _c.execute(
+            "SELECT DISTINCT string_value FROM embedding_metadata WHERE key='source'"
+        ).fetchall()
+        _c.close()
+        ya_indexados = {os.path.basename(str(r[0])) for r in rows if r[0]}
     except Exception as e:
-        print(f"⚠️ [SEED] No se pudo verificar duplicados: {e}. Se reindexarán todos.")
-        ya_indexados = set()
+        print(f"⚠️ [SEED] No se pudo verificar duplicados vía SQLite: {e}. Se reindexarán todos.")
+
+    print(f"   📂 Archivos ya indexados en conocimiento_web: {len(ya_indexados)}")
 
     docs_nuevos = fragmentos = omitidos = errores = 0
 
