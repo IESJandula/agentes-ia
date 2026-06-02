@@ -34,12 +34,16 @@ def _get_checkpointer():
     if _checkpointer is not None:
         return _checkpointer
     try:
+        import sqlite3 as _sqlite3
         from langgraph.checkpoint.sqlite import SqliteSaver
         # Guardamos dentro de chroma_db_v3/ que ya tiene bind-mount persistente en Dokploy
         _db_dir  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data", "chroma_db_v3")
         _db_path = os.path.join(_db_dir, "checkpoints.db")
         os.makedirs(_db_dir, exist_ok=True)
-        _checkpointer = SqliteSaver.from_conn_string(_db_path)
+        # from_conn_string() devuelve un context manager en versiones nuevas;
+        # usamos sqlite3 directamente para obtener la instancia del saver.
+        _conn = _sqlite3.connect(_db_path, check_same_thread=False)
+        _checkpointer = SqliteSaver(_conn)
         print(f"✅ [MEMORIA] Conversaciones persistentes (SQLite: {_db_path})")
     except Exception as e:
         print(f"⚠️  [MEMORIA] SqliteSaver no disponible ({e}). Usando MemorySaver (sin persistencia).")
