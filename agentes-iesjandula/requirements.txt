@@ -12,7 +12,6 @@ langchain-core
 langchain-community
 langgraph
 langgraph-checkpoint-sqlite
-aiosqlite
 langchain-google-genai
 
 # --- Herramientas de Búsqueda y Navegación ---
