@@ -879,6 +879,7 @@
         <button class="tab-btn" data-tab="queries">🔍 Consultas</button>
         <button class="tab-btn" data-tab="no-results">⚠️ Sin resultado <span id="no-result-count" style="display:none;background:var(--warn);color:#000;border-radius:99px;padding:1px 7px;font-size:11px;margin-left:4px;"></span></button>
         <button class="tab-btn" data-tab="cache">🗑️ Caché</button>
+        <button class="tab-btn" data-tab="legislacion">⚖️ Legislación</button>
       </div>
 
       <!-- TAB: Documents -->
@@ -1074,6 +1075,36 @@
         </div>
       </div>
 
+      <!-- TAB: Legislación -->
+      <div class="tab-content" id="tab-legislacion">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">⚖️ Base de Conocimiento Legislativa</div>
+            <button class="btn btn-primary" onclick="runSeed()" id="btn-seed">
+              ▶ Iniciar seed
+            </button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0;">
+            <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:20px;text-align:center;">
+              <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Documentos indexados</div>
+              <div style="font-size:36px;font-weight:700;color:var(--success);" id="seed-docs">—</div>
+            </div>
+            <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:20px;text-align:center;">
+              <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Embeddings totales</div>
+              <div style="font-size:36px;font-weight:700;color:var(--accent);" id="seed-embeddings">—</div>
+            </div>
+            <div style="background:var(--surface-2);border-radius:var(--radius-md);padding:20px;text-align:center;">
+              <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Tamaño BD</div>
+              <div style="font-size:36px;font-weight:700;color:var(--text);" id="seed-size">—</div>
+            </div>
+          </div>
+          <p style="color:var(--text-dim);font-size:13px;line-height:1.6;">
+            El seed indexa los PDFs de <code>data/legislacion/</code> en ChromaDB. Los documentos ya indexados se omiten automáticamente.
+            Úsalo tras añadir nuevos documentos al servidor.
+          </p>
+        </div>
+      </div>
+
     </div>
   </main>
 
@@ -1100,6 +1131,7 @@
         // Lazy-load content on tab switch
         if (target === 'queries') loadQueries();
         if (target === 'no-results') loadNoResults();
+        if (target === 'legislacion') loadSeedStatus();
       });
     });
 
@@ -1125,6 +1157,37 @@
         throw new Error(`HTTP ${res.status}: ${text}`);
       }
       return res.json();
+    }
+
+    // ── Legislación / Seed ────────────────────────────────────────────────────
+    async function loadSeedStatus() {
+      try {
+        const data = await apiFetch('/api/admin/seed/status');
+        document.getElementById('seed-docs').textContent =
+          (data.documentos_indexados ?? 0).toLocaleString('es-ES');
+        document.getElementById('seed-embeddings').textContent =
+          (data.embeddings_total ?? 0).toLocaleString('es-ES');
+        document.getElementById('seed-size').textContent =
+          data.db_size_mb ? `${data.db_size_mb} MB` : '—';
+      } catch (e) {
+        showToast('Error cargando estado del seed', 'error');
+      }
+    }
+
+    async function runSeed() {
+      const btn = document.getElementById('btn-seed');
+      btn.disabled = true;
+      btn.textContent = '⏳ Iniciando…';
+      try {
+        await apiFetch('/api/admin/seed/run', { method: 'POST' });
+        showToast('Seed iniciado en segundo plano. Los documentos se indexarán progresivamente.', 'success', 5000);
+        setTimeout(loadSeedStatus, 3000);
+      } catch (e) {
+        showToast('Error al iniciar el seed', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '▶ Iniciar seed';
+      }
     }
 
     // ── Stats ─────────────────────────────────────────────────────────────────

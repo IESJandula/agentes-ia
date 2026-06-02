@@ -17,3 +17,15 @@ async def obtener_consultas(limite: int = 50, solo_sin_resultado: bool = False):
 @router.delete("/cache")
 async def limpiar_cache():
     return AdminController.limpiar_cache()
+
+
+@router.get("/seed/status")
+async def seed_status():
+    """Estado actual de la base de conocimiento legislativa."""
+    return AdminController.get_seed_status()
+
+
+@router.post("/seed/run")
+async def seed_run():
+    """Lanza el seed de legislación en segundo plano."""
+    return await AdminController.run_seed()
