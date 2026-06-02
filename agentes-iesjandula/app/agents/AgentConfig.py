@@ -33,17 +33,11 @@ def _get_checkpointer():
     global _checkpointer
     if _checkpointer is not None:
         return _checkpointer
-    try:
-        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-        # Guardamos dentro de chroma_db_v3/ que ya tiene bind-mount persistente en Dokploy
-        _db_dir  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data", "chroma_db_v3")
-        _db_path = os.path.join(_db_dir, "checkpoints.db")
-        os.makedirs(_db_dir, exist_ok=True)
-        _checkpointer = AsyncSqliteSaver.from_conn_string(_db_path)
-        print(f"✅ [MEMORIA] Conversaciones persistentes async (SQLite: {_db_path})")
-    except Exception as e:
-        print(f"⚠️  [MEMORIA] AsyncSqliteSaver no disponible ({e}). Usando MemorySaver (sin persistencia).")
-        _checkpointer = MemorySaver()
+    # AsyncSqliteSaver requiere gestión de ciclo de vida async (async with) que
+    # no es compatible con nuestra arquitectura de grafo estático. Se usa
+    # MemorySaver hasta implementar una solución correcta.
+    _checkpointer = MemorySaver()
+    print("ℹ️  [MEMORIA] Usando MemorySaver (memoria por sesión, sin persistencia entre reinicios).")
     return _checkpointer
 
 
