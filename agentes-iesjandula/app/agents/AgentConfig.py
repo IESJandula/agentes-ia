@@ -24,13 +24,19 @@ import os
 _checkpointer = None
 
 def _get_checkpointer():
-    """Devuelve un checkpointer SQLite si está disponible, si no MemorySaver."""
+    """
+    Devuelve un checkpointer SQLite persistente si está disponible.
+    Se guarda en data/chroma_db_v3/checkpoints.db para aprovechar el
+    volumen persistente ya montado en Dokploy, sobreviviendo a redeployments.
+    Fallback a MemorySaver si el paquete no está instalado.
+    """
     global _checkpointer
     if _checkpointer is not None:
         return _checkpointer
     try:
         from langgraph.checkpoint.sqlite import SqliteSaver
-        _db_dir  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data")
+        # Guardamos dentro de chroma_db_v3/ que ya tiene bind-mount persistente en Dokploy
+        _db_dir  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data", "chroma_db_v3")
         _db_path = os.path.join(_db_dir, "checkpoints.db")
         os.makedirs(_db_dir, exist_ok=True)
         _checkpointer = SqliteSaver.from_conn_string(_db_path)

@@ -160,8 +160,15 @@ converter = DocumentConverter(
 )
 
 # Número de páginas por lote para Docling (evita std::bad_alloc en PDFs grandes)
-# Reducido a 4 para ser más conservador con la memoria
 DOCLING_PAGE_BATCH_SIZE = 4
+
+def _docling_batch_size(total_pages: int) -> int:
+    """Reduce el lote para PDFs muy grandes para evitar OOM."""
+    if total_pages > 1000:
+        return 1   # 1 página/lote para documentos gigantes (>1000 pág)
+    if total_pages > 300:
+        return 2   # 2 páginas/lote para documentos grandes
+    return DOCLING_PAGE_BATCH_SIZE
 
 # Colecciones — se crean si no existen
 # Nombres internos de ChromaDB
@@ -292,10 +299,11 @@ def _contar_paginas_pdf(file_path: str) -> int:
 
 def _extraer_texto_docling_por_lotes(file_path: str, total_pages: int) -> str:
     """
-    Procesa un PDF con Docling en lotes de DOCLING_PAGE_BATCH_SIZE páginas.
-    Llama a gc.collect() entre lotes para liberar memoria y evitar std::bad_alloc.
+    Procesa un PDF con Docling en lotes de páginas adaptativos según el tamaño.
+    PDFs >1000 páginas usan lotes de 1 para evitar OOM; el resto usa 4.
+    Llama a gc.collect() entre lotes para liberar memoria.
     """
-    batch = DOCLING_PAGE_BATCH_SIZE
+    batch = _docling_batch_size(total_pages)
     partes_md = []
     lotes_ok = 0
     lotes_fail = 0
@@ -597,11 +605,13 @@ def procesar_y_añadir(file_path: str, perfil: str, nombre_original: str = None)
 
     BATCH_SIZE = 20
     MAX_RETRIES = 3
-    PAUSE_ENTRE_LOTES = 5   # segundos entre lotes para respetar rate-limit
+    # Pausa configurable: EMBEDDING_RATE_LIMIT_SLEEP=0 en tier de pago, 5 en free tier
+    PAUSE_ENTRE_LOTES = float(os.environ.get("EMBEDDING_RATE_LIMIT_SLEEP", "5"))
     total = len(chunks)
     num_lotes = -(-total // BATCH_SIZE)
     print(f"📤 [DEBUG] Subiendo {total} fragmentos en {num_lotes} lotes de {BATCH_SIZE}...")
-    print(f"   ⏱️  Pausa de {PAUSE_ENTRE_LOTES}s entre lotes (rate-limit: 100 req/min free tier)")
+    if PAUSE_ENTRE_LOTES > 0:
+        print(f"   ⏱️  Pausa de {PAUSE_ENTRE_LOTES}s entre lotes (configurable via EMBEDDING_RATE_LIMIT_SLEEP)")
     try:
         for i in range(0, total, BATCH_SIZE):
             batch_docs  = documents[i:i+BATCH_SIZE]

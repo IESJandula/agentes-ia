@@ -4,6 +4,7 @@ Persiste los datos en data/usage_stats.json para sobrevivir reinicios.
 """
 import json
 import os
+import sqlite3
 from datetime import datetime
 from typing import Optional
 
@@ -88,6 +89,27 @@ class AdminService:
         if solo_sin_resultado:
             queries = [q for q in queries if q["sin_resultado"]]
         return queries[:limite]
+
+
+    def get_seed_status(self) -> dict:
+        """Estado de la base de conocimiento legislativa vía SQLite directo."""
+        _DATA = os.path.join(os.path.dirname(STATS_PATH))
+        db_path = os.path.join(_DATA, "chroma_db_v3", "chroma.sqlite3")
+        try:
+            c = sqlite3.connect(db_path, timeout=5)
+            embeddings = c.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+            docs = c.execute(
+                "SELECT COUNT(DISTINCT string_value) FROM embedding_metadata WHERE key='source'"
+            ).fetchone()[0]
+            c.close()
+            return {
+                "embeddings_total": embeddings,
+                "documentos_indexados": docs,
+                "db_size_mb": round(os.path.getsize(db_path) / 1_048_576, 1) if os.path.exists(db_path) else 0,
+                "status": "ok",
+            }
+        except Exception as e:
+            return {"embeddings_total": 0, "documentos_indexados": 0, "db_size_mb": 0, "status": f"error: {e}"}
 
 
 admin_service = AdminService()
