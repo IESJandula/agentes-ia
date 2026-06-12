@@ -94,6 +94,92 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
     def supported_spaces(self):
         return ["cosine", "l2", "ip"]
 
+
+class OllamaEmbeddingFunction(EmbeddingFunction):
+    """Embeddings vía un servidor Ollama autohospedado (sin límite de cuota).
+
+    Pensado para producción: el servidor Ollama no tiene rate-limit, por lo que
+    elimina el cuello de botella de la API de Gemini. Requiere haber hecho
+    'ollama pull <modelo-embeddings>' en el servidor (p.ej. nomic-embed-text).
+    """
+
+    def __init__(self, model: str, base_url: str, dim: int = 768):
+        self.model = model
+        self.base_url = base_url
+        self.dim = dim
+        # Import perezoso: solo se necesita langchain-ollama si se usa este backend.
+        from langchain_ollama import OllamaEmbeddings
+        self.embedding_client = OllamaEmbeddings(model=model, base_url=base_url)
+
+    def __call__(self, input):
+        if isinstance(input, str):
+            input = [input]
+        return self.embed_documents(list(input))
+
+    def embed_documents(self, texts):
+        if not texts:
+            return []
+        try:
+            return self.embedding_client.embed_documents(list(texts))
+        except Exception as e:
+            print(f"❌ [OLLAMA EMBEDDINGS] Error: {e}")
+            raise
+
+    def embed_query(self, text=None, *, input=None, **kwargs):
+        query = text if text is not None else input
+        return self.embedding_client.embed_query(query)
+
+    @staticmethod
+    def name() -> str:
+        return "ollama-embeddings"
+
+    @staticmethod
+    def build_from_config(config: dict) -> "OllamaEmbeddingFunction":
+        return OllamaEmbeddingFunction(
+            model=config["model"],
+            base_url=config["base_url"],
+            dim=config.get("dim", 768),
+        )
+
+    def get_config(self) -> dict:
+        return {"model": self.model, "base_url": self.base_url, "dim": self.dim}
+
+    def default_space(self):
+        return "cosine"
+
+    def supported_spaces(self):
+        return ["cosine", "l2", "ip"]
+
+
+def _crear_embedding_fn():
+    """Crea la función de embeddings según EMBED_PROVIDER (gemini | ollama).
+
+    Por defecto: gemini (comportamiento actual). Cuando esté listo el servidor
+    Ollama, basta con definir EMBED_PROVIDER=ollama y las variables OLLAMA_*.
+
+    ⚠️ IMPORTANTE: cambiar de proveedor de embeddings cambia la DIMENSIÓN de los
+    vectores, así que hay que REINDEXAR (borrar data/chroma_db_v3 y re-ejecutar el
+    seed). No se pueden mezclar embeddings de Gemini y Ollama en la misma colección.
+    """
+    provider = os.getenv("EMBED_PROVIDER", "gemini").strip().lower()
+
+    if provider == "ollama":
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        model = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+        dim = int(os.getenv("OLLAMA_EMBED_DIM", "768"))
+        print(f"🧬 [EMBEDDINGS] Proveedor: Ollama · modelo={model} · {base_url}")
+        return OllamaEmbeddingFunction(model=model, base_url=base_url, dim=dim)
+
+    # --- Default: Gemini ---
+    if not os.getenv("GOOGLE_API_KEY"):
+        raise ValueError("⚠️ GOOGLE_API_KEY no está configurada en las variables de entorno")
+    print("🧬 [EMBEDDINGS] Proveedor: Gemini (models/gemini-embedding-2)")
+    return GeminiEmbeddingFunction(
+        api_key=os.getenv("GOOGLE_API_KEY"),
+        model="models/gemini-embedding-2",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Configuración global
 # ---------------------------------------------------------------------------
@@ -134,15 +220,8 @@ else:
     client = chromadb.PersistentClient(path=chroma_persist_path)
     print("✅ [DATABASE] ChromaDB local persistente inicializado.")
 
-# Embeddings de Gemini: API nativa integrada en LangChain
-# Requiere GENAI_API_KEY en variables de entorno
-if not os.getenv("GOOGLE_API_KEY"):
-    raise ValueError("⚠️ GOOGLE_API_KEY no está configurada en las variables de entorno")
-
-embedding_fn = GeminiEmbeddingFunction(
-    api_key=os.getenv("GOOGLE_API_KEY"),
-    model="models/gemini-embedding-2",
-)
+# Embeddings: proveedor configurable (gemini por defecto, ollama en producción).
+embedding_fn = _crear_embedding_fn()
 
 # Conversor Docling (singleton de módulo)
 # Pipeline optimizada: desactiva generación de imágenes para reducir consumo de RAM
