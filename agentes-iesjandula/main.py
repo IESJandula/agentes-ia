@@ -143,6 +143,15 @@ async def serve_index():
         "api_docs": "/docs"
     }
 
+@app.get("/favicon.ico")
+async def serve_favicon():
+    """Sirve el favicon (SVG) y evita el 404 de /favicon.ico."""
+    ruta = os.path.join("static", "favicon.svg")
+    if os.path.exists(ruta):
+        return FileResponse(ruta, media_type="image/svg+xml")
+    return {"mensaje": "favicon no encontrado"}
+
+
 @app.get("/admin")
 async def serve_admin():
     """Sirve el panel de administración."""
