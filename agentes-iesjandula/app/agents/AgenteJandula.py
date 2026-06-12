@@ -53,7 +53,7 @@ class AgenteJandula:
         if self.modo in ["voz", "hibrido"]:
             texto_usuario = self.motor_voz.escuchar(entrada)
 
-        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 15}
+        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 8}
         resultado = await self.grafo.ainvoke({"messages": [("user", texto_usuario)]}, config)
 
         # Extraer texto de forma segura (soporta str y list/multimodal)
@@ -85,7 +85,7 @@ class AgenteJandula:
           {"tipo": "error",       "mensaje": "..."}              → error recuperable
           {"tipo": "fin",         "fuentes": [...]}              → respuesta completada
         """
-        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 15}
+        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 8}
         fuentes: set[str] = set()
         tokens_emitidos: int = 0
         post_tool_phase: bool = False

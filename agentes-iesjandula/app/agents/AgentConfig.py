@@ -136,7 +136,7 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
     if not os.getenv("GOOGLE_API_KEY"):
         raise ValueError("⚠️ GOOGLE_API_KEY no está configurada en las variables de entorno")
 
-    _model_name = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+    _model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     print(f"   🤖 Usando modelo LLM: {_model_name}")
     _base_llm  = ChatGoogleGenerativeAI(
         model=_model_name,
@@ -144,7 +144,13 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
         max_retries=3,
         streaming=True,
     )
-    llm_clasif = _base_llm                                                          # sin tools
+    # Clasificador determinista: temperatura 0 para enrutar de forma estable.
+    llm_clasif = ChatGoogleGenerativeAI(
+        model=_model_name,
+        temperature=0.0,
+        max_retries=3,
+        streaming=False,
+    )                                                                              # sin tools
     llm_pub    = _base_llm.bind_tools(tools_pub)   if tools_pub   else _base_llm
     llm_prof   = _base_llm.bind_tools(tools_prof)  if tools_prof  else _base_llm
     llm_legis  = _base_llm.bind_tools(tools_legis) if tools_legis else _base_llm
@@ -177,6 +183,17 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
         limpio = texto.strip().lower().rstrip(".,!?¿¡")
         # Coincidencia exacta o inicio de saludo
         return any(limpio == s or limpio.startswith(s + " ") for s in _SALUDOS) and len(limpio) < 40
+
+    # ── Helper: ¿ya se forzó una búsqueda en este turno? ──────────────────────
+    def _guardrail_ya_usado(estado: Estado) -> bool:
+        """True si en el turno actual (desde el último HumanMessage) ya forzamos
+        una tool_call. Evita bucles de guardrail que agotan recursion_limit/cuota."""
+        for m in reversed(estado["messages"]):
+            if isinstance(m, HumanMessage):
+                return False
+            if isinstance(m, AIMessage) and m.additional_kwargs.get("forced_guardrail"):
+                return True
+        return False
 
     # ── Helper: obtener último mensaje del usuario ────────────────────────────
     def _ultimo_mensaje_usuario(estado: Estado) -> str | None:
@@ -279,12 +296,13 @@ REGLAS DE ORO:
 
         # ── GUARDRAIL: forzar búsqueda si el LLM no llamó herramientas y no hay contexto ──
         has_context = any(isinstance(m, ToolMessage) for m in mensajes[-3:])
-        if not getattr(respuesta, "tool_calls", None) and not has_context:
+        if not getattr(respuesta, "tool_calls", None) and not has_context and not _guardrail_ya_usado(estado):
             query_usuario = _ultimo_mensaje_usuario(estado)
             if query_usuario and not _es_saludo(query_usuario):
                 print(f"⚠️ [GUARDRAIL] LLM no llamó herramientas. Forzando búsqueda web: '{query_usuario}'")
                 respuesta = AIMessage(
                     content="",
+                    additional_kwargs={"forced_guardrail": True},
                     tool_calls=[{
                         "id": f"forced_{uuid.uuid4().hex[:8]}",
                         "name": "busqueda_web_ies_jandula",
@@ -311,12 +329,13 @@ REGLAS DE ORO:
 
         # Guardrail: si no llamó herramientas y no hay contexto, forzar búsqueda legislativa
         has_context = any(isinstance(m, ToolMessage) for m in mensajes[-3:])
-        if not getattr(respuesta, "tool_calls", None) and not has_context:
+        if not getattr(respuesta, "tool_calls", None) and not has_context and not _guardrail_ya_usado(estado):
             query_usuario = _ultimo_mensaje_usuario(estado)
             if query_usuario and not _es_saludo(query_usuario):
                 print(f"⚠️ [GUARDRAIL] Forzando búsqueda legislativa: '{query_usuario}'")
                 respuesta = AIMessage(
                     content="",
+                    additional_kwargs={"forced_guardrail": True},
                     tool_calls=[{
                         "id": f"forced_{uuid.uuid4().hex[:8]}",
                         "name": "busqueda_legislacion_educativa",
@@ -344,12 +363,13 @@ REGLAS DE ORO:
 
         # ── GUARDRAIL: forzar búsqueda si el LLM no llamó herramientas y no hay contexto ──
         has_context = any(isinstance(m, ToolMessage) for m in mensajes[-3:])
-        if not getattr(respuesta, "tool_calls", None) and not has_context:
+        if not getattr(respuesta, "tool_calls", None) and not has_context and not _guardrail_ya_usado(estado):
             query_usuario = _ultimo_mensaje_usuario(estado)
             if query_usuario and not _es_saludo(query_usuario):
                 print(f"⚠️ [GUARDRAIL] LLM no llamó herramientas. Forzando búsqueda RAG: '{query_usuario}'")
                 respuesta = AIMessage(
                     content="",
+                    additional_kwargs={"forced_guardrail": True},
                     tool_calls=[{
                         "id": f"forced_{uuid.uuid4().hex[:8]}",
                         "name": "guia_profesorado",
@@ -361,6 +381,9 @@ REGLAS DE ORO:
 
     # ── Ejecutor de tools (paralelo + timeout + auto-aprendizaje) ────────────
     _TOOL_TIMEOUT = float(os.getenv("TOOL_TIMEOUT_SECONDS", "15"))
+    # Auto-indexado de búsquedas web en ChromaDB. Desactivable por env para evitar
+    # contaminar el RAG y reducir escrituras concurrentes a HNSW/SQLite.
+    _AUTOLEARN_ACTIVO = os.getenv("AUTOLEARN_ACTIVO", "false").lower() in ("1", "true", "yes")
     # Tools cuyo output se auto-indexa en ChromaDB para aprendizaje continuo
     _TOOLS_AUTOLEARN = {"busqueda_legislacion_educativa", "busqueda_web_general"}
 
@@ -392,7 +415,7 @@ REGLAS DE ORO:
 
                 # Auto-aprendizaje: indexar resultados de búsquedas web en background
                 obs_str = str(obs)
-                if nombre in _TOOLS_AUTOLEARN and len(obs_str) > 500:
+                if _AUTOLEARN_ACTIVO and nombre in _TOOLS_AUTOLEARN and len(obs_str) > 500:
                     query = call["args"].get("query", call["args"].get("search", ""))
                     async def _autolearn(content=obs_str, q=query, n=nombre):
                         try:

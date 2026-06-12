@@ -67,10 +67,22 @@ app = FastAPI(
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # Configurar CORS
+# Nota: allow_origins=["*"] junto a allow_credentials=True es una combinación
+# inválida según el spec CORS y los navegadores la rechazan. Como no usamos
+# cookies/credenciales, dejamos "*" con credentials desactivado. Si en el futuro
+# se necesitan credenciales, define CORS_ORIGINS con orígenes explícitos.
+_cors_origins_env = os.getenv("CORS_ORIGINS", "").strip()
+if _cors_origins_env:
+    _allow_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
+    _allow_credentials = True
+else:
+    _allow_origins = ["*"]
+    _allow_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_allow_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
