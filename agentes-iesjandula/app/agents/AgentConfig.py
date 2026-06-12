@@ -90,6 +90,45 @@ async def _llm_invoke_con_retry(
             else:
                 raise  # agotados los reintentos
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Factory de LLM por proveedor (gemini | ollama)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _crear_chat_llm(temperature: float, streaming: bool):
+    """Crea un chat-LLM según LLM_PROVIDER.
+
+    - gemini (default): ChatGoogleGenerativeAI (sujeto a rate-limit free tier).
+    - ollama: ChatOllama contra un servidor autohospedado (sin rate-limit).
+      El modelo DEBE soportar tool-calling (p.ej. llama3.1, qwen2.5, mistral-nemo),
+      porque el grafo usa bind_tools para todas las herramientas.
+    """
+    provider = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
+
+    if provider == "ollama":
+        from langchain_ollama import ChatOllama
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        model = os.getenv("OLLAMA_CHAT_MODEL", "qwen2.5:7b")
+        print(f"   🤖 LLM: Ollama · modelo={model} · {base_url}")
+        return ChatOllama(
+            model=model,
+            base_url=base_url,
+            temperature=temperature,
+            # ChatOllama gestiona el streaming internamente al usar astream_events.
+        )
+
+    # --- Default: Gemini ---
+    if not os.getenv("GOOGLE_API_KEY"):
+        raise ValueError("⚠️ GOOGLE_API_KEY no está configurada en las variables de entorno")
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    print(f"   🤖 LLM: Gemini · modelo={model}")
+    return ChatGoogleGenerativeAI(
+        model=model,
+        temperature=temperature,
+        max_retries=3,
+        streaming=streaming,
+    )
+
+
 from app.tools import obtener_tools_publicas, obtener_tools_profesorado, obtener_tools_legislacion
 from .prompts.prompt_manager import (
     PROMPTS, BEHAVIOR_PUBLIC, BEHAVIOR_TEACHER, BEHAVIOR_LEGISLATION, REGLAS_VOZ
@@ -133,24 +172,9 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
     #   gemini-3-flash-preview  →  20 req/día  (evitar)
     #   gemini-2.0-flash-lite   →  200 req/día
     #   gemini-1.5-flash        →  1500 req/día ← recomendado para desarrollo
-    if not os.getenv("GOOGLE_API_KEY"):
-        raise ValueError("⚠️ GOOGLE_API_KEY no está configurada en las variables de entorno")
-
-    _model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-    print(f"   🤖 Usando modelo LLM: {_model_name}")
-    _base_llm  = ChatGoogleGenerativeAI(
-        model=_model_name,
-        temperature=0.4,
-        max_retries=3,
-        streaming=True,
-    )
+    _base_llm  = _crear_chat_llm(temperature=0.4, streaming=True)
     # Clasificador determinista: temperatura 0 para enrutar de forma estable.
-    llm_clasif = ChatGoogleGenerativeAI(
-        model=_model_name,
-        temperature=0.0,
-        max_retries=3,
-        streaming=False,
-    )                                                                              # sin tools
+    llm_clasif = _crear_chat_llm(temperature=0.0, streaming=False)                  # sin tools
     llm_pub    = _base_llm.bind_tools(tools_pub)   if tools_pub   else _base_llm
     llm_prof   = _base_llm.bind_tools(tools_prof)  if tools_prof  else _base_llm
     llm_legis  = _base_llm.bind_tools(tools_legis) if tools_legis else _base_llm
