@@ -18,6 +18,26 @@ from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GZip selectivo: NUNCA comprimir respuestas SSE (text/event-stream).
+# Comprimir un stream rompe el chunked-encoding sobre HTTP/2 y provoca
+# ERR_HTTP2_PROTOCOL_ERROR en el navegador (el stream nunca llega).
+# ─────────────────────────────────────────────────────────────────────────────
+class SelectiveGZipMiddleware:
+    def __init__(self, app, minimum_size: int = 500, exclude_paths: tuple = ()):
+        self.app = app
+        self.exclude_paths = exclude_paths
+        self._gzip = GZipMiddleware(app, minimum_size=minimum_size)
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http" and any(
+            scope.get("path", "").startswith(p) for p in self.exclude_paths
+        ):
+            await self.app(scope, receive, send)  # sin compresión
+        else:
+            await self._gzip(scope, receive, send)
+
 from app.api.routes.AgentRoutes import router as agent_router
 from app.api.routes.RagRoutes import router as rag_router
 from app.api.routes.AdminRoutes import router as admin_router
@@ -63,8 +83,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Comprimir respuestas de texto (JSON, SSE, HTML) — ~70% menos ancho de banda
-app.add_middleware(GZipMiddleware, minimum_size=500)
+# Comprimir respuestas de texto (JSON, HTML) — ~70% menos ancho de banda.
+# Se EXCLUYE /api/chat/stream porque comprimir SSE rompe el streaming HTTP/2.
+app.add_middleware(
+    SelectiveGZipMiddleware,
+    minimum_size=500,
+    exclude_paths=("/api/chat/stream",),
+)
 
 # Configurar CORS
 # Nota: allow_origins=["*"] junto a allow_credentials=True es una combinación

@@ -1386,8 +1386,17 @@
           busqueda_web_ies_jandula: '🌐', busqueda_web_general: '🔍',
           extraer_contenido_web: '📄'
         };
+        const etiquetas = {
+          guia_profesorado: 'la guía del profesorado',
+          guia_alumnado: 'la guía del alumnado',
+          busqueda_legislacion_educativa: 'la legislación educativa',
+          consultar_conocimiento_aprendido: 'el conocimiento aprendido',
+          busqueda_web_ies_jandula: 'la web del IES Jándula',
+          busqueda_web_general: 'la web',
+          extraer_contenido_web: 'el contenido de la página'
+        };
         const icono = iconos[herramientaActiva] || '🔧';
-        const nombre = herramientaActiva.replace(/_/g, ' ');
+        const nombre = etiquetas[herramientaActiva] || herramientaActiva.replace(/_/g, ' ');
         // Mostrar indicador de herramienta SIN borrar texto previo
         content.innerHTML = `<p class="tool-thinking">${icono} Consultando ${nombre}…</p>`;
       } else if (textoAcumulado) {
