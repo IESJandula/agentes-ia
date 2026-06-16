@@ -12,6 +12,7 @@ langchain-core
 langchain-community
 langgraph
 langgraph-checkpoint-sqlite
+aiosqlite
 langchain-google-genai
 langchain-ollama
 
