@@ -348,7 +348,9 @@ REGLAS DE ORO:
 
         # ── GUARDRAIL: forzar búsqueda si el LLM no llamó herramientas y no hay contexto ──
         has_context = any(isinstance(m, ToolMessage) for m in mensajes[-3:])
-        if not getattr(respuesta, "tool_calls", None) and not has_context and not _guardrail_ya_usado(estado):
+        _sin_texto = not _extract_text(respuesta.content).strip()
+        if (not getattr(respuesta, "tool_calls", None) and not has_context
+                and _sin_texto and not _guardrail_ya_usado(estado)):
             query_usuario = _ultimo_mensaje_usuario(estado)
             if query_usuario and not _es_saludo(query_usuario):
                 print(f"⚠️ [GUARDRAIL] LLM no llamó herramientas. Forzando búsqueda web: '{query_usuario}'")
@@ -358,7 +360,7 @@ REGLAS DE ORO:
                     tool_calls=[{
                         "id": f"forced_{uuid.uuid4().hex[:8]}",
                         "name": "busqueda_web_ies_jandula",
-                        "args": {"query": query_usuario + " IES Jándula 2025"},
+                        "args": {"search": query_usuario + " IES Jándula 2025"},
                     }],
                 )
 
@@ -381,7 +383,9 @@ REGLAS DE ORO:
 
         # Guardrail: si no llamó herramientas y no hay contexto, forzar búsqueda legislativa
         has_context = any(isinstance(m, ToolMessage) for m in mensajes[-3:])
-        if not getattr(respuesta, "tool_calls", None) and not has_context and not _guardrail_ya_usado(estado):
+        _sin_texto = not _extract_text(respuesta.content).strip()
+        if (not getattr(respuesta, "tool_calls", None) and not has_context
+                and _sin_texto and not _guardrail_ya_usado(estado)):
             query_usuario = _ultimo_mensaje_usuario(estado)
             if query_usuario and not _es_saludo(query_usuario):
                 print(f"⚠️ [GUARDRAIL] Forzando búsqueda legislativa: '{query_usuario}'")
@@ -415,7 +419,9 @@ REGLAS DE ORO:
 
         # ── GUARDRAIL: forzar búsqueda si el LLM no llamó herramientas y no hay contexto ──
         has_context = any(isinstance(m, ToolMessage) for m in mensajes[-3:])
-        if not getattr(respuesta, "tool_calls", None) and not has_context and not _guardrail_ya_usado(estado):
+        _sin_texto = not _extract_text(respuesta.content).strip()
+        if (not getattr(respuesta, "tool_calls", None) and not has_context
+                and _sin_texto and not _guardrail_ya_usado(estado)):
             query_usuario = _ultimo_mensaje_usuario(estado)
             if query_usuario and not _es_saludo(query_usuario):
                 print(f"⚠️ [GUARDRAIL] LLM no llamó herramientas. Forzando búsqueda RAG: '{query_usuario}'")
