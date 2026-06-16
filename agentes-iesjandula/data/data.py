@@ -255,6 +255,7 @@ _COLECCION_PROFESORES  = "guia_profesorado"
 _COLECCION_ALUMNOS     = "guia_alumnado"
 _COLECCION_CONOCIMIENTO = "conocimiento_web"  # auto-indexado desde búsquedas web
 _COLECCION_LEGISLACION = "legislacion"        # 90 PDFs oficiales (seed), colección LIMPIA
+_COLECCION_CENTRO = "centro_info"             # docs institucionales curados (oferta, ciclos, servicios)
 
 # Perfil → nombre de colección ChromaDB
 _PERFIL_A_COLECCION = {
@@ -262,6 +263,7 @@ _PERFIL_A_COLECCION = {
     "alumnos":      _COLECCION_ALUMNOS,
     "conocimiento": _COLECCION_CONOCIMIENTO,
     "legislacion":  _COLECCION_LEGISLACION,
+    "centro":       _COLECCION_CENTRO,
 }
 
 def _crear_o_recrear_coleccion(nombre_coleccion: str, embedding_fn):
@@ -300,6 +302,7 @@ profesores_col  = _crear_o_recrear_coleccion(_COLECCION_PROFESORES,   embedding_
 alumnos_col     = _crear_o_recrear_coleccion(_COLECCION_ALUMNOS,      embedding_fn)
 conocimiento_col = _crear_o_recrear_coleccion(_COLECCION_CONOCIMIENTO, embedding_fn)
 legislacion_col = _crear_o_recrear_coleccion(_COLECCION_LEGISLACION,  embedding_fn)
+centro_col      = _crear_o_recrear_coleccion(_COLECCION_CENTRO,       embedding_fn)
 
 # Debug: Mostrar conteo al iniciar.
 # Para conocimiento_web usamos SQLite directo: .count() carga el índice HNSW
@@ -751,8 +754,105 @@ def procesar_y_añadir(file_path: str, perfil: str, nombre_original: str = None)
 #: Ruta por defecto de la carpeta de legislación.
 RUTA_LEGISLACION_DEFAULT = os.path.join(current_dir, "legislacion")
 
+#: Ruta por defecto de la carpeta de documentos del centro (oferta educativa,
+#: ciclos, servicios, etc.). Documentos institucionales CURADOS del IES Jándula.
+RUTA_CENTRO_DEFAULT = os.path.join(current_dir, "centro")
+
 #: Extensiones de archivo soportadas para el seed.
 _EXTENSIONES_SEED = {".pdf", ".txt", ".md"}
+
+
+def _seed_carpeta(carpeta: str, perfil_destino: str, coleccion_nombre: str,
+                  coleccion_obj, etiqueta: str) -> dict:
+    """
+    Indexa todos los documentos de una carpeta en una colección de ChromaDB,
+    deduplicando por nombre de archivo DENTRO de esa colección.
+
+    Genérico: lo usan tanto el seed de legislación como el de documentos del centro.
+    """
+    if not os.path.isdir(carpeta):
+        print(f"ℹ️ [SEED:{etiqueta}] Carpeta no encontrada: {carpeta}. Creando...")
+        os.makedirs(carpeta, exist_ok=True)
+        return {"docs_nuevos": 0, "fragmentos": 0, "omitidos": 0, "errores": 0}
+
+    archivos = sorted(
+        f for f in os.listdir(carpeta)
+        if os.path.splitext(f)[1].lower() in _EXTENSIONES_SEED
+    )
+    if not archivos:
+        print(f"ℹ️ [SEED:{etiqueta}] Carpeta vacía: {carpeta}")
+        return {"docs_nuevos": 0, "fragmentos": 0, "omitidos": 0, "errores": 0}
+
+    print(f"\n📚 [SEED:{etiqueta}] {len(archivos)} documento(s) en {carpeta}")
+
+    # Dedup por nombre de archivo, limitado a ESTA colección (JOIN en chroma.sqlite3).
+    ya_indexados: set[str] = set()
+    try:
+        import sqlite3 as _sq
+        _db = os.path.join(persist_db_path, "chroma.sqlite3")
+        _c = _sq.connect(_db, timeout=15)
+        try:
+            rows = _c.execute(
+                """
+                SELECT DISTINCT em.string_value
+                FROM embedding_metadata em
+                JOIN embeddings e   ON e.id = em.id
+                JOIN segments s     ON s.id = e.segment_id
+                JOIN collections c  ON c.id = s.collection
+                WHERE em.key = 'source' AND c.name = ?
+                """,
+                (coleccion_nombre,),
+            ).fetchall()
+        except Exception as join_err:
+            print(f"⚠️ [SEED:{etiqueta}] JOIN por colección no disponible ({join_err}). Fallback.")
+            if coleccion_obj.count() == 0:
+                rows = []
+            else:
+                rows = _c.execute(
+                    "SELECT DISTINCT string_value FROM embedding_metadata WHERE key='source'"
+                ).fetchall()
+        _c.close()
+        ya_indexados = {os.path.basename(str(r[0])) for r in rows if r[0]}
+    except Exception as e:
+        print(f"⚠️ [SEED:{etiqueta}] No se pudo verificar duplicados: {e}. Se reindexarán todos.")
+
+    print(f"   📂 Archivos ya indexados en '{coleccion_nombre}': {len(ya_indexados)}")
+
+    docs_nuevos = fragmentos = omitidos = errores = 0
+    for nombre_archivo in archivos:
+        if nombre_archivo in ya_indexados:
+            print(f"   ⏭️  Omitido (ya indexado): {nombre_archivo}")
+            omitidos += 1
+            continue
+        ruta = os.path.join(carpeta, nombre_archivo)
+        print(f"\n   📄 [{archivos.index(nombre_archivo)+1}/{len(archivos)}] {nombre_archivo}")
+        try:
+            n = procesar_y_añadir(ruta, perfil_destino, nombre_archivo)
+            if n > 0:
+                print(f"   ✅ {nombre_archivo}: {n} fragmentos indexados")
+                docs_nuevos += 1
+                fragmentos += n
+            else:
+                print(f"   ⚠️  {nombre_archivo}: sin fragmentos (texto vacío o no extraíble)")
+                errores += 1
+        except Exception as e:
+            print(f"   ❌ Error indexando {nombre_archivo}: {e}")
+            errores += 1
+
+    print(
+        f"\n📊 [SEED:{etiqueta}] Completado — {docs_nuevos} docs nuevos · "
+        f"{fragmentos} fragmentos · {omitidos} omitidos · {errores} errores"
+    )
+    return {"docs_nuevos": docs_nuevos, "fragmentos": fragmentos,
+            "omitidos": omitidos, "errores": errores}
+
+
+def seed_centro_folder(carpeta: str = None) -> dict:
+    """Indexa los documentos institucionales del centro (data/centro/) en la
+    colección 'centro_info'. Aquí van la oferta educativa, ciclos, servicios,
+    horarios y demás info pública curada del IES Jándula."""
+    carpeta = carpeta or RUTA_CENTRO_DEFAULT
+    return _seed_carpeta(carpeta, "centro", _COLECCION_CENTRO, centro_col, "CENTRO")
 
 
 def seed_legislacion_folder(carpeta: str = None) -> dict:
@@ -774,97 +874,8 @@ def seed_legislacion_folder(carpeta: str = None) -> dict:
         ``{'docs_nuevos': int, 'fragmentos': int, 'omitidos': int, 'errores': int}``
     """
     carpeta = carpeta or RUTA_LEGISLACION_DEFAULT
-
-    # Crear la carpeta si no existe (primer despliegue)
-    if not os.path.isdir(carpeta):
-        print(f"ℹ️ [SEED] Carpeta de legislación no encontrada: {carpeta}. Creando...")
-        os.makedirs(carpeta, exist_ok=True)
-        return {"docs_nuevos": 0, "fragmentos": 0, "omitidos": 0, "errores": 0}
-
-    archivos = sorted(
-        f for f in os.listdir(carpeta)
-        if os.path.splitext(f)[1].lower() in _EXTENSIONES_SEED
-    )
-
-    if not archivos:
-        print(f"ℹ️ [SEED] Carpeta de legislación vacía: {carpeta}")
-        return {"docs_nuevos": 0, "fragmentos": 0, "omitidos": 0, "errores": 0}
-
-    print(f"\n📚 [SEED] {len(archivos)} documento(s) encontrado(s) en {carpeta}")
-
-    # Nombres de archivo ya presentes EN LA COLECCIÓN DE LEGISLACIÓN.
-    # Usamos SQLite directo para evitar cargar el índice HNSW completo
-    # (col.get() con 40k+ embeddings bloquea varios minutos).
-    # El JOIN limita el dedup a la colección 'legislacion' (no a conocimiento_web),
-    # para que el seed funcione aunque los mismos PDFs estén en otra colección.
-    ya_indexados: set[str] = set()
-    try:
-        import sqlite3 as _sq
-        _db = os.path.join(persist_db_path, "chroma.sqlite3")
-        _c = _sq.connect(_db, timeout=15)
-        try:
-            rows = _c.execute(
-                """
-                SELECT DISTINCT em.string_value
-                FROM embedding_metadata em
-                JOIN embeddings e   ON e.id = em.id
-                JOIN segments s     ON s.id = e.segment_id
-                JOIN collections c  ON c.id = s.collection
-                WHERE em.key = 'source' AND c.name = ?
-                """,
-                (_COLECCION_LEGISLACION,),
-            ).fetchall()
-        except Exception as join_err:
-            # Esquema distinto de Chroma → fallback: si la colección está vacía,
-            # no hay nada que deduplicar (se indexan todos); si no, dedup global.
-            print(f"⚠️ [SEED] JOIN por colección no disponible ({join_err}). Fallback.")
-            if legislacion_col.count() == 0:
-                rows = []
-            else:
-                rows = _c.execute(
-                    "SELECT DISTINCT string_value FROM embedding_metadata WHERE key='source'"
-                ).fetchall()
-        _c.close()
-        ya_indexados = {os.path.basename(str(r[0])) for r in rows if r[0]}
-    except Exception as e:
-        print(f"⚠️ [SEED] No se pudo verificar duplicados vía SQLite: {e}. Se reindexarán todos.")
-
-    print(f"   📂 Archivos ya indexados en '{_COLECCION_LEGISLACION}': {len(ya_indexados)}")
-
-    docs_nuevos = fragmentos = omitidos = errores = 0
-
-    for nombre_archivo in archivos:
-        if nombre_archivo in ya_indexados:
-            print(f"   ⏭️  Omitido (ya indexado): {nombre_archivo}")
-            omitidos += 1
-            continue
-
-        ruta = os.path.join(carpeta, nombre_archivo)
-        print(f"\n   📄 [{archivos.index(nombre_archivo)+1}/{len(archivos)}] {nombre_archivo}")
-        try:
-            n = procesar_y_añadir(ruta, "legislacion", nombre_archivo)
-            if n > 0:
-                print(f"   ✅ {nombre_archivo}: {n} fragmentos indexados")
-                docs_nuevos += 1
-                fragmentos += n
-            else:
-                print(f"   ⚠️  {nombre_archivo}: sin fragmentos (texto vacío o no extraíble)")
-                errores += 1
-        except Exception as e:
-            print(f"   ❌ Error indexando {nombre_archivo}: {e}")
-            errores += 1
-
-    print(
-        f"\n📊 [SEED] Completado — "
-        f"{docs_nuevos} docs nuevos · {fragmentos} fragmentos · "
-        f"{omitidos} omitidos · {errores} errores"
-    )
-    return {
-        "docs_nuevos": docs_nuevos,
-        "fragmentos": fragmentos,
-        "omitidos": omitidos,
-        "errores": errores,
-    }
+    return _seed_carpeta(carpeta, "legislacion", _COLECCION_LEGISLACION,
+                         legislacion_col, "LEGISLACION")
 
 
 # ---------------------------------------------------------------------------
