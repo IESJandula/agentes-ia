@@ -22,22 +22,50 @@ import os
 # Checkpointer persistente (SQLite) con fallback a MemorySaver
 # ─────────────────────────────────────────────────────────────────────────────
 _checkpointer = None
+_checkpointer_conn = None  # conexión aiosqlite de larga vida (no cerrar entre requests)
 
-def _get_checkpointer():
+
+def _ruta_checkpoints_db() -> str:
+    """Ruta del fichero de checkpoints, dentro del volumen persistente de Dokploy."""
+    base = os.getenv("CHROMA_PERSIST_PATH")
+    if not base:
+        # data/chroma_db_v3 relativo a la raíz del proyecto (este archivo: app/agents/)
+        base = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "data", "chroma_db_v3",
+        )
+    os.makedirs(base, exist_ok=True)
+    return os.path.join(base, "checkpoints.db")
+
+
+async def _get_checkpointer():
     """
-    Devuelve un checkpointer SQLite persistente si está disponible.
-    Se guarda en data/chroma_db_v3/checkpoints.db para aprovechar el
-    volumen persistente ya montado en Dokploy, sobreviviendo a redeployments.
-    Fallback a MemorySaver si el paquete no está instalado.
+    Devuelve un checkpointer SQLite persistente (memoria que sobrevive a
+    redeployments porque el .db vive en el volumen persistente).
+
+    Patrón estable: se abre UNA conexión aiosqlite de larga vida en el event
+    loop de la app y se reutiliza. Se evita 'from_conn_string' porque es un
+    context manager que cerraría la conexión al salir del 'async with',
+    incompatible con un grafo estático compilado una sola vez.
+
+    Fallback a MemorySaver si langgraph-checkpoint-sqlite/aiosqlite no están.
     """
-    global _checkpointer
+    global _checkpointer, _checkpointer_conn
     if _checkpointer is not None:
         return _checkpointer
-    # AsyncSqliteSaver requiere gestión de ciclo de vida async (async with) que
-    # no es compatible con nuestra arquitectura de grafo estático. Se usa
-    # MemorySaver hasta implementar una solución correcta.
-    _checkpointer = MemorySaver()
-    print("ℹ️  [MEMORIA] Usando MemorySaver (memoria por sesión, sin persistencia entre reinicios).")
+    try:
+        import aiosqlite
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+        ruta = _ruta_checkpoints_db()
+        _checkpointer_conn = await aiosqlite.connect(ruta)
+        saver = AsyncSqliteSaver(_checkpointer_conn)
+        await saver.setup()
+        _checkpointer = saver
+        print(f"✅ [MEMORIA] AsyncSqliteSaver persistente en {ruta}")
+    except Exception as e:
+        _checkpointer = MemorySaver()
+        print(f"ℹ️  [MEMORIA] Fallback a MemorySaver (sin persistencia entre reinicios). Motivo: {e}")
     return _checkpointer
 
 
@@ -539,7 +567,7 @@ REGLAS DE ORO:
         },
     )
 
-    grafo = builder.compile(checkpointer=_get_checkpointer())
+    grafo = builder.compile(checkpointer=await _get_checkpointer())
     # recursion_limit reducido: 15 ciclos son más que suficientes
     # y protegen contra bucles infinitos de tool-calling
 
