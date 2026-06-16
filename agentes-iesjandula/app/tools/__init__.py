@@ -3,6 +3,7 @@ from .guia_alumnado_tool import guia_alumnado
 from .tavily_busqueda_tool import tool_busqueda_web_centro, tool_busqueda_general
 from .playwright_busqueda_tool import extraer_contenido_web
 from .legislacion_tool import busqueda_legislacion_educativa
+from .legislacion_local_tool import consultar_legislacion
 from .conocimiento_tool import consultar_conocimiento_aprendido
 
 
@@ -25,10 +26,11 @@ async def obtener_tools_profesorado() -> list:
     Tools para profesores: guía interna, guía alumnado, búsqueda web y legislación.
     """
     return [
-        consultar_conocimiento_aprendido,   # caché semántico (primero — más rápido)
-        guia_profesorado,
+        guia_profesorado,                   # 1) documentos internos del centro
         guia_alumnado,
-        tool_busqueda_web_centro,
+        consultar_legislacion,              # 2) legislación oficial indexada (limpia)
+        consultar_conocimiento_aprendido,   #    caché auto-aprendido (web previa)
+        tool_busqueda_web_centro,           # 3) web (último recurso)
         tool_busqueda_general,
         extraer_contenido_web,
     ]
@@ -40,11 +42,12 @@ async def obtener_tools_legislacion() -> list:
     Incluye búsqueda en BOE/BOJA y el conocimiento aprendido.
     """
     return [
-        consultar_conocimiento_aprendido,   # primero: caché local instantánea
-        busqueda_legislacion_educativa,      # BOE, BOJA, Junta de Andalucía
-        tool_busqueda_general,               # fallback internet abierto
-        guia_profesorado,                    # por si hay normativa interna relacionada
-        extraer_contenido_web,               # para leer el texto completo de una ley
+        guia_profesorado,                    # 1) normativa interna del centro (si aplica)
+        consultar_legislacion,               # 2) legislación oficial indexada (LIMPIA) — PRIMERO
+        consultar_conocimiento_aprendido,    #    caché auto-aprendido (web previa)
+        busqueda_legislacion_educativa,      # 3) BOE, BOJA, Junta de Andalucía (web)
+        tool_busqueda_general,               #    fallback internet abierto
+        extraer_contenido_web,               #    leer el texto completo de una ley
     ]
 
 

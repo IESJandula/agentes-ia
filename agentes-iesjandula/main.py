@@ -63,8 +63,15 @@ async def lifespan(app: FastAPI):
         print("📊 Cargando/Verificando Bases de Datos RAG...")
         inicializar_bases_datos()
 
-        print("📚 Lanzando seed de legislación en segundo plano...")
-        asyncio.create_task(_seed_task())
+        # El seed de legislación reindexa los 90 PDFs (~42k fragmentos) en la
+        # colección 'legislacion'. Con embeddings de Gemini free-tier (5 req/min)
+        # esto agotaría la cuota; por eso solo corre cuando SEED_LEGISLACION=true
+        # (hazlo al migrar a Ollama, con embeddings locales rápidos y gratis).
+        if os.getenv("SEED_LEGISLACION", "false").strip().lower() in ("1", "true", "yes"):
+            print("📚 Lanzando seed de legislación en segundo plano...")
+            asyncio.create_task(_seed_task())
+        else:
+            print("⏭️  Seed de legislación DESACTIVADO (SEED_LEGISLACION!=true).")
 
         print("🚀 Inicializando Cerebro del Agente (Modo Texto/Profesores)...")
         await agents_service.procesar_chat("Hola", perfil="profesores")

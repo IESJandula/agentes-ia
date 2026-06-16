@@ -19,9 +19,9 @@ Este proyecto es un **Agente IA Multimodal** que usa:
 En Coolify, ve a **Environment Variables** y configura:
 
 ```env
-# ✅ REQUIERIDAS - API Keys
-GENAI_API_KEY=AIzaSyBMLwvvuUIvWB_x6jCip9MX5XuBGcVzlDQ
-TAVILY_API_KEY=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
+# ✅ REQUIERIDAS - API Keys (pon aquí tus claves reales, NUNCA las subas al repo)
+GOOGLE_API_KEY=tu_google_api_key
+TAVILY_API_KEY=tu_tavily_api_key
 
 # 🗄️ ChromaDB Remoto - IMPORTANTE
 # Opción A: Si ChromaDB está en el mismo host de Coolify

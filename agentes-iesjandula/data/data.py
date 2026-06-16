@@ -254,12 +254,14 @@ def _docling_batch_size(total_pages: int) -> int:
 _COLECCION_PROFESORES  = "guia_profesorado"
 _COLECCION_ALUMNOS     = "guia_alumnado"
 _COLECCION_CONOCIMIENTO = "conocimiento_web"  # auto-indexado desde búsquedas web
+_COLECCION_LEGISLACION = "legislacion"        # 90 PDFs oficiales (seed), colección LIMPIA
 
 # Perfil → nombre de colección ChromaDB
 _PERFIL_A_COLECCION = {
-    "profesores":  _COLECCION_PROFESORES,
-    "alumnos":     _COLECCION_ALUMNOS,
+    "profesores":   _COLECCION_PROFESORES,
+    "alumnos":      _COLECCION_ALUMNOS,
     "conocimiento": _COLECCION_CONOCIMIENTO,
+    "legislacion":  _COLECCION_LEGISLACION,
 }
 
 def _crear_o_recrear_coleccion(nombre_coleccion: str, embedding_fn):
@@ -297,6 +299,7 @@ def _crear_o_recrear_coleccion(nombre_coleccion: str, embedding_fn):
 profesores_col  = _crear_o_recrear_coleccion(_COLECCION_PROFESORES,   embedding_fn)
 alumnos_col     = _crear_o_recrear_coleccion(_COLECCION_ALUMNOS,      embedding_fn)
 conocimiento_col = _crear_o_recrear_coleccion(_COLECCION_CONOCIMIENTO, embedding_fn)
+legislacion_col = _crear_o_recrear_coleccion(_COLECCION_LEGISLACION,  embedding_fn)
 
 # Debug: Mostrar conteo al iniciar.
 # Para conocimiento_web usamos SQLite directo: .count() carga el índice HNSW
@@ -789,23 +792,44 @@ def seed_legislacion_folder(carpeta: str = None) -> dict:
 
     print(f"\n📚 [SEED] {len(archivos)} documento(s) encontrado(s) en {carpeta}")
 
-    # Nombres de archivo ya presentes en conocimiento_web.
+    # Nombres de archivo ya presentes EN LA COLECCIÓN DE LEGISLACIÓN.
     # Usamos SQLite directo para evitar cargar el índice HNSW completo
     # (col.get() con 40k+ embeddings bloquea varios minutos).
+    # El JOIN limita el dedup a la colección 'legislacion' (no a conocimiento_web),
+    # para que el seed funcione aunque los mismos PDFs estén en otra colección.
     ya_indexados: set[str] = set()
     try:
         import sqlite3 as _sq
         _db = os.path.join(persist_db_path, "chroma.sqlite3")
         _c = _sq.connect(_db, timeout=15)
-        rows = _c.execute(
-            "SELECT DISTINCT string_value FROM embedding_metadata WHERE key='source'"
-        ).fetchall()
+        try:
+            rows = _c.execute(
+                """
+                SELECT DISTINCT em.string_value
+                FROM embedding_metadata em
+                JOIN embeddings e   ON e.id = em.id
+                JOIN segments s     ON s.id = e.segment_id
+                JOIN collections c  ON c.id = s.collection
+                WHERE em.key = 'source' AND c.name = ?
+                """,
+                (_COLECCION_LEGISLACION,),
+            ).fetchall()
+        except Exception as join_err:
+            # Esquema distinto de Chroma → fallback: si la colección está vacía,
+            # no hay nada que deduplicar (se indexan todos); si no, dedup global.
+            print(f"⚠️ [SEED] JOIN por colección no disponible ({join_err}). Fallback.")
+            if legislacion_col.count() == 0:
+                rows = []
+            else:
+                rows = _c.execute(
+                    "SELECT DISTINCT string_value FROM embedding_metadata WHERE key='source'"
+                ).fetchall()
         _c.close()
         ya_indexados = {os.path.basename(str(r[0])) for r in rows if r[0]}
     except Exception as e:
         print(f"⚠️ [SEED] No se pudo verificar duplicados vía SQLite: {e}. Se reindexarán todos.")
 
-    print(f"   📂 Archivos ya indexados en conocimiento_web: {len(ya_indexados)}")
+    print(f"   📂 Archivos ya indexados en '{_COLECCION_LEGISLACION}': {len(ya_indexados)}")
 
     docs_nuevos = fragmentos = omitidos = errores = 0
 
@@ -818,7 +842,7 @@ def seed_legislacion_folder(carpeta: str = None) -> dict:
         ruta = os.path.join(carpeta, nombre_archivo)
         print(f"\n   📄 [{archivos.index(nombre_archivo)+1}/{len(archivos)}] {nombre_archivo}")
         try:
-            n = procesar_y_añadir(ruta, "conocimiento", nombre_archivo)
+            n = procesar_y_añadir(ruta, "legislacion", nombre_archivo)
             if n > 0:
                 print(f"   ✅ {nombre_archivo}: {n} fragmentos indexados")
                 docs_nuevos += 1
