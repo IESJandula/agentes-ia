@@ -42,7 +42,7 @@ from app.api.routes.AgentRoutes import router as agent_router
 from app.api.routes.RagRoutes import router as rag_router
 from app.api.routes.AdminRoutes import router as admin_router
 from app.api.services.AgenteService import agents_service
-from data.data import inicializar_bases_datos, seed_legislacion_folder
+from data.data import inicializar_bases_datos, seed_legislacion_folder, seed_centro_folder
 
 load_dotenv()
 
@@ -52,6 +52,14 @@ async def _seed_task():
         await asyncio.to_thread(seed_legislacion_folder)
     except Exception as e:
         print(f"⚠️ [SEED] Error en tarea de seed de legislación: {e}")
+
+
+async def _seed_centro_task():
+    """Tarea en background: indexa documentos curados de data/centro/ al arrancar."""
+    try:
+        await asyncio.to_thread(seed_centro_folder)
+    except Exception as e:
+        print(f"⚠️ [SEED] Error en tarea de seed del centro: {e}")
 
 
 @asynccontextmanager
@@ -72,6 +80,14 @@ async def lifespan(app: FastAPI):
             asyncio.create_task(_seed_task())
         else:
             print("⏭️  Seed de legislación DESACTIVADO (SEED_LEGISLACION!=true).")
+
+        # Seed de documentos del centro (data/centro/). Mismo blindaje de cuota:
+        # actívalo con SEED_CENTRO=true (idealmente con embeddings locales/Ollama).
+        if os.getenv("SEED_CENTRO", "false").strip().lower() in ("1", "true", "yes"):
+            print("🏫 Lanzando seed de documentos del centro en segundo plano...")
+            asyncio.create_task(_seed_centro_task())
+        else:
+            print("⏭️  Seed del centro DESACTIVADO (SEED_CENTRO!=true).")
 
         print("🚀 Inicializando Cerebro del Agente (Modo Texto/Profesores)...")
         await agents_service.procesar_chat("Hola", perfil="profesores")

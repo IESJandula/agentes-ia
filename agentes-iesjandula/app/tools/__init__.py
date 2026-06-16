@@ -4,6 +4,7 @@ from .tavily_busqueda_tool import tool_busqueda_web_centro, tool_busqueda_genera
 from .playwright_busqueda_tool import extraer_contenido_web
 from .legislacion_tool import busqueda_legislacion_educativa
 from .legislacion_local_tool import consultar_legislacion
+from .centro_tool import consultar_info_centro
 from .conocimiento_tool import consultar_conocimiento_aprendido
 
 
@@ -13,9 +14,10 @@ async def obtener_tools_publicas() -> list:
     Disponibles para TODOS los perfiles.
     """
     return [
-        consultar_conocimiento_aprendido,   # caché semántico (primero — más rápido)
+        consultar_info_centro,              # 1) docs oficiales curados del centro
         guia_alumnado,
-        tool_busqueda_web_centro,
+        consultar_conocimiento_aprendido,   #    caché auto-aprendido (web previa)
+        tool_busqueda_web_centro,           # 2) web del centro (último recurso)
         tool_busqueda_general,
         extraer_contenido_web,
     ]
@@ -27,6 +29,7 @@ async def obtener_tools_profesorado() -> list:
     """
     return [
         guia_profesorado,                   # 1) documentos internos del centro
+        consultar_info_centro,              #    info oficial del centro (oferta, servicios)
         guia_alumnado,
         consultar_legislacion,              # 2) legislación oficial indexada (limpia)
         consultar_conocimiento_aprendido,   #    caché auto-aprendido (web previa)
