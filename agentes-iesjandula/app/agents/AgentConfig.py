@@ -159,7 +159,7 @@ def _crear_chat_llm(temperature: float, streaming: bool):
 
 from app.tools import obtener_tools_publicas, obtener_tools_profesorado, obtener_tools_legislacion
 from .prompts.prompt_manager import (
-    PROMPTS, BEHAVIOR_PUBLIC, BEHAVIOR_TEACHER, BEHAVIOR_LEGISLATION, REGLAS_VOZ
+    PROMPTS, behavior_public, behavior_teacher, BEHAVIOR_LEGISLATION, REGLAS_VOZ
 )
 
 
@@ -190,8 +190,8 @@ async def configurar_grafo_ies(perfil: str, es_voz: bool = False):
 
     # ── 2. Prompts ───────────────────────────────────────────────────────────
     _voz_suffix  = REGLAS_VOZ if es_voz else ""
-    PROMPT_PUB   = PROMPTS[perfil] + "\n\n" + BEHAVIOR_PUBLIC       + _voz_suffix
-    PROMPT_PROF  = PROMPTS[perfil] + "\n\n" + BEHAVIOR_TEACHER      + _voz_suffix
+    PROMPT_PUB   = PROMPTS[perfil] + "\n\n" + behavior_public()     + _voz_suffix
+    PROMPT_PROF  = PROMPTS[perfil] + "\n\n" + behavior_teacher()    + _voz_suffix
     PROMPT_LEGIS = PROMPTS[perfil] + "\n\n" + BEHAVIOR_LEGISLATION  + _voz_suffix
 
     # ── 3. LLMs ─────────────────────────────────────────────────────────────

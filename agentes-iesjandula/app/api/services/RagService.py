@@ -9,9 +9,15 @@ from data.data import (
     listar_documentos_en_coleccion,
     eliminar_documento_de_coleccion,
 )
+from app.api.services.KbService import CATEGORIAS, kb_service
 
 EXTENSIONES_PERMITIDAS = {".pdf", ".txt", ".md"}
-PERFILES_VALIDOS = {"profesores", "alumnos"}
+
+#: Categorías gestionables desde el panel. Antes eran solo 'profesores' y
+#: 'alumnos', lo que dejaba la legislación, la información del centro y el
+#: conocimiento aprendido sin forma de curarlos: se podían indexar (por seed o
+#: solos) pero no listar ni borrar desde ninguna parte.
+PERFILES_VALIDOS = set(CATEGORIAS)
 
 
 class RagService:
@@ -78,14 +84,22 @@ class RagService:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
-    async def procesar_subida_multiple(self, perfil: str, files: List[UploadFile]) -> dict:
+    async def procesar_subida_multiple(
+        self, perfil: str, files: List[UploadFile], usuario: str | None = None
+    ) -> dict:
         """
         Procesa y sube múltiples archivos al RAG de forma secuencial,
         devolviendo un resumen con el resultado de cada uno.
+
+        Anota quién sube cada documento: ChromaDB no guarda autoría, y en una
+        base que cura media docena de personas es lo primero que se pregunta
+        cuando aparece un PDF que nadie reconoce.
         """
         resultados = []
         for file in files:
             resultado = await self._procesar_un_archivo(perfil, file)
+            if resultado["status"] == "success":
+                kb_service.registrar_subida(perfil, resultado["archivo"], usuario)
             resultados.append(resultado)
 
         exitosos = [r for r in resultados if r["status"] == "success"]
@@ -104,7 +118,13 @@ class RagService:
         return {"perfil": perfil, "documentos": docs, "total": len(docs)}
 
     def eliminar_doc(self, perfil: str, nombre_archivo: str) -> dict:
-        return eliminar_documento_de_coleccion(perfil, nombre_archivo)
+        resultado = eliminar_documento_de_coleccion(perfil, nombre_archivo)
+        if resultado.get("status") == "success":
+            # El documento ya no existe: su ficha en el registro sobra, y dejarla
+            # haría que al resubir el mismo archivo apareciera con la autoría del
+            # anterior.
+            kb_service.olvidar(perfil, nombre_archivo)
+        return resultado
 
 
 # Instancia singleton

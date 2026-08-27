@@ -820,6 +820,97 @@
     .mt-4 { margin-top: 16px; }
     .mt-3 { margin-top: 12px; }
     .flex-gap { display: flex; align-items: center; gap: 8px; }
+
+    /* ── Sesión ── */
+    .usuario-chip {
+      font-size: 12px;
+      color: var(--text-dim);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 3px 10px;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .gate {
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .gate-msg {
+      max-width: 460px;
+      text-align: center;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+    }
+
+    .gate-msg h2 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+    .gate-msg p  { font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
+    .gate-msg a  { color: var(--accent); }
+
+    /* ── Orden de consulta ── */
+    .orden-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+
+    .orden-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    .orden-pos {
+      flex: none;
+      width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-glow);
+      color: var(--accent);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .orden-nombre { font-weight: 600; flex: none; }
+    .orden-desc   { color: var(--text-dim); font-size: 12px; flex: 1;
+                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .orden-cuenta { color: var(--text-hint); font-size: 12px;
+                    font-family: 'JetBrains Mono', monospace; flex: none; }
+    .orden-botones { display: flex; gap: 4px; flex: none; }
+    .orden-botones .btn { padding: 3px 9px; }
+
+    @media (max-width: 700px) {
+      .orden-desc { display: none; }
+    }
+
+    /* ── Documentos retirados ── */
+    .doc-item-meta {
+      display: block;
+      font-size: 11px;
+      color: var(--text-hint);
+      font-weight: 400;
+    }
+
+    .doc-item-retirado { opacity: 0.55; }
+    .doc-item-retirado .doc-item-name { text-decoration: line-through; }
+    .doc-toggle-btn { flex: none; padding: 3px 10px; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -838,8 +929,20 @@
       </div>
       <button class="btn btn-ghost" onclick="refreshAll()">↻ Actualizar</button>
       <a href="/" class="btn btn-ghost">← Volver al chat</a>
+      <span class="usuario-chip" id="usuario-chip">…</span>
+      <button class="btn btn-ghost" id="btn-logout" title="Cerrar sesión">Salir</button>
     </div>
   </header>
+
+  <!-- Cortina de sesión: tapa el panel hasta que Keycloak confirma quién entra.
+       Va en el HTML y no la pinta el JS a propósito: si el módulo fallara al
+       cargar, lo que queda a la vista es esta pantalla, no el panel abierto. -->
+  <div class="gate" id="gate">
+    <div class="gate-msg">
+      <h2>Comprobando sesión…</h2>
+      <p>Un momento.</p>
+    </div>
+  </div>
 
   <!-- Main -->
   <main class="container">
@@ -876,107 +979,38 @@
     <!-- Tabs -->
     <div class="tabs-wrapper">
       <div class="tabs">
-        <button class="tab-btn active" data-tab="documents">📁 Documentos</button>
+        <button class="tab-btn active" data-tab="documents">📁 Base de conocimiento</button>
         <button class="tab-btn" data-tab="queries">🔍 Consultas</button>
         <button class="tab-btn" data-tab="no-results">⚠️ Sin resultado <span id="no-result-count" style="display:none;background:var(--warn);color:#000;border-radius:99px;padding:1px 7px;font-size:11px;margin-left:4px;"></span></button>
         <button class="tab-btn" data-tab="cache">🗑️ Caché</button>
         <button class="tab-btn" data-tab="legislacion">⚖️ Legislación</button>
       </div>
 
-      <!-- TAB: Documents -->
+      <!-- TAB: Base de conocimiento -->
       <div class="tab-content active" id="tab-documents">
-        <div class="docs-grid">
 
-          <!-- Profesores -->
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">
-                <span class="icon">📚</span>
-                Documentos
-                <span class="profile-badge profesores">profesores</span>
-              </div>
-              <button class="btn btn-ghost" onclick="loadDocuments('profesores')" style="font-size:12px;">↻</button>
+        <!-- Orden de consulta: la prioridad es por CATEGORÍA, no por documento.
+             Dentro de una categoría manda la relevancia semántica. -->
+        <div class="card" style="margin-bottom:18px;">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="icon">🔢</span>
+              Orden de consulta
             </div>
-            <div class="card-body">
-              <ul class="doc-list" id="doc-list-profesores">
-                <li class="doc-empty">Cargando documentos...</li>
-              </ul>
-
-              <!-- Upload zone profesores -->
-              <div class="upload-zone" id="drop-profesores"
-                   ondragover="handleDragOver(event,'profesores')"
-                   ondragleave="handleDragLeave(event,'profesores')"
-                   ondrop="handleDrop(event,'profesores')">
-                <input type="file" multiple accept=".pdf,.txt,.md,.docx,.csv"
-                       id="file-input-profesores"
-                       onchange="handleFileSelect(event,'profesores')">
-                <span class="upload-zone-icon">📂</span>
-                <div class="upload-zone-text">Arrastra archivos o haz clic para seleccionar</div>
-                <div class="upload-zone-hint">PDF, TXT, MD, DOCX, CSV · múltiples archivos</div>
-              </div>
-              <div class="upload-file-list" id="upload-list-profesores"></div>
-              <div class="progress-bar" id="progress-profesores">
-                <div class="progress-fill" id="progress-fill-profesores"></div>
-              </div>
-              <div class="upload-actions">
-                <button class="btn btn-success" id="upload-btn-profesores"
-                        onclick="uploadFiles('profesores')" disabled>
-                  ⬆ Subir documentos
-                </button>
-                <button class="btn btn-ghost" id="clear-btn-profesores"
-                        onclick="clearUploadSelection('profesores')" disabled>
-                  Limpiar
-                </button>
-              </div>
-            </div>
+            <span class="text-muted" style="font-size:12px;">
+              El agente prueba las fuentes en este orden y se queda con la primera que responde.
+            </span>
           </div>
-
-          <!-- Alumnos -->
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">
-                <span class="icon">🎓</span>
-                Documentos
-                <span class="profile-badge alumnos">alumnos</span>
-              </div>
-              <button class="btn btn-ghost" onclick="loadDocuments('alumnos')" style="font-size:12px;">↻</button>
-            </div>
-            <div class="card-body">
-              <ul class="doc-list" id="doc-list-alumnos">
-                <li class="doc-empty">Cargando documentos...</li>
-              </ul>
-
-              <!-- Upload zone alumnos -->
-              <div class="upload-zone" id="drop-alumnos"
-                   ondragover="handleDragOver(event,'alumnos')"
-                   ondragleave="handleDragLeave(event,'alumnos')"
-                   ondrop="handleDrop(event,'alumnos')">
-                <input type="file" multiple accept=".pdf,.txt,.md,.docx,.csv"
-                       id="file-input-alumnos"
-                       onchange="handleFileSelect(event,'alumnos')">
-                <span class="upload-zone-icon">📂</span>
-                <div class="upload-zone-text">Arrastra archivos o haz clic para seleccionar</div>
-                <div class="upload-zone-hint">PDF, TXT, MD, DOCX, CSV · múltiples archivos</div>
-              </div>
-              <div class="upload-file-list" id="upload-list-alumnos"></div>
-              <div class="progress-bar" id="progress-alumnos">
-                <div class="progress-fill" id="progress-fill-alumnos"></div>
-              </div>
-              <div class="upload-actions">
-                <button class="btn btn-success" id="upload-btn-alumnos"
-                        onclick="uploadFiles('alumnos')" disabled>
-                  ⬆ Subir documentos
-                </button>
-                <button class="btn btn-ghost" id="clear-btn-alumnos"
-                        onclick="clearUploadSelection('alumnos')" disabled>
-                  Limpiar
-                </button>
-              </div>
-            </div>
+          <div class="card-body">
+            <ol class="orden-list" id="orden-list">
+              <li class="doc-empty">Cargando…</li>
+            </ol>
           </div>
-
         </div>
+
+        <div class="docs-grid" id="kb-grid"></div>
       </div>
+
 
       <!-- TAB: Queries -->
       <div class="tab-content" id="tab-queries">
@@ -1118,7 +1152,9 @@
     const REFRESH_INTERVAL_MS = 30_000;
 
     // Selected files per profile
-    const selectedFiles = { profesores: [], alumnos: [] };
+    // Archivos seleccionados por categoría. Se rellena solo, según las categorías
+    // que devuelva el backend: aquí ya no hay ninguna escrita a mano.
+    const selectedFiles = {};
 
     // ── Tabs ──────────────────────────────────────────────────────────────────
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1152,7 +1188,11 @@
 
     // ── Fetch helpers ─────────────────────────────────────────────────────────
     async function apiFetch(path, options = {}) {
-      const res = await fetch(BASE_URL + path, options);
+      // window.__fetch lo instala el módulo de sesión (static/auth.js): añade el
+      // Bearer y lo renueva si está a punto de caducar. El `?? fetch` no es un
+      // hueco de seguridad: sin token el backend responde 401 igualmente.
+      const f = window.__fetch ?? fetch;
+      const res = await f(BASE_URL + path, options);
       if (!res.ok) {
         const text = await res.text().catch(() => res.statusText);
         throw new Error(`HTTP ${res.status}: ${text}`);
@@ -1231,50 +1271,189 @@
       }
     }
 
-    // ── Documents ─────────────────────────────────────────────────────────────
-    async function loadDocuments(perfil) {
-      const list = document.getElementById(`doc-list-${perfil}`);
-      list.innerHTML = `<li class="doc-empty skeleton" style="height:40px;border:none;background:none;">
-        <div class="skeleton" style="width:100%;height:38px;border-radius:6px;"></div>
-      </li>`;
+    // ── Base de conocimiento ──────────────────────────────────────────────────
+    // Una sola llamada devuelve las cinco categorías en su orden de consulta con
+    // sus documentos. La UI se dibuja entera desde ahí: no hay ninguna categoría
+    // escrita a mano en el HTML, así que añadir una en el backend la hace
+    // aparecer aquí sola.
+
+    let KB = null;   // último resumen recibido
+
+    async function loadKb() {
+      const grid = document.getElementById('kb-grid');
+      try {
+        KB = await apiFetch('/api/rag/kb');
+        renderOrden(KB);
+        renderKb(KB);
+      } catch (err) {
+        grid.innerHTML = `<div class="card"><div class="card-body" style="color:var(--error);">
+          ⚠️ Error cargando la base de conocimiento: ${escHtml(err.message)}
+        </div></div>`;
+        showToast('Error cargando la base de conocimiento: ' + err.message, 'error');
+      }
+    }
+
+    function renderOrden(kb) {
+      const ol = document.getElementById('orden-list');
+      ol.innerHTML = '';
+      kb.categorias.forEach((cat, i) => {
+        const li = document.createElement('li');
+        li.className = 'orden-item';
+        li.innerHTML = `
+          <span class="orden-pos">${cat.posicion}</span>
+          <span class="orden-nombre">${escHtml(cat.etiqueta)}</span>
+          <span class="orden-desc">${escHtml(cat.descripcion)}</span>
+          <span class="orden-cuenta">${cat.activos}/${cat.total_documentos} docs</span>
+          <span class="orden-botones">
+            <button class="btn btn-ghost" title="Subir" ${i === 0 ? 'disabled' : ''}
+              onclick="moverCategoria('${escHtml(cat.categoria)}', -1)">↑</button>
+            <button class="btn btn-ghost" title="Bajar" ${i === kb.categorias.length - 1 ? 'disabled' : ''}
+              onclick="moverCategoria('${escHtml(cat.categoria)}', 1)">↓</button>
+          </span>`;
+        ol.appendChild(li);
+      });
+    }
+
+    async function moverCategoria(categoria, delta) {
+      const orden = KB.categorias.map(c => c.categoria);
+      const i = orden.indexOf(categoria);
+      const j = i + delta;
+      if (i < 0 || j < 0 || j >= orden.length) return;
+      [orden[i], orden[j]] = [orden[j], orden[i]];
 
       try {
-        const data = await apiFetch(`/api/rag/documents/${perfil}`);
-        const docs = data.documents ?? data.archivos ?? data.files ?? [];
-
-        if (docs.length === 0) {
-          list.innerHTML = `<li class="doc-empty">
-            <span>📭</span> Sin documentos para ${perfil}
-          </li>`;
-          return;
-        }
-
-        list.innerHTML = '';
-        docs.forEach(doc => {
-          const name = typeof doc === 'string' ? doc : (doc.nombre ?? doc.filename ?? doc.name ?? String(doc));
-          const size = typeof doc === 'object' && doc.size
-            ? formatBytes(doc.size)
-            : '';
-          const li = document.createElement('li');
-          li.className = 'doc-item';
-          li.innerHTML = `
-            <span class="doc-item-name" title="${escHtml(name)}">📄 ${escHtml(name)}</span>
-            ${size ? `<span class="doc-item-size">${size}</span>` : ''}
-            <button class="doc-delete-btn" title="Eliminar documento"
-              onclick="deleteDocument('${escHtml(perfil)}', '${escHtml(name)}', this)">🗑</button>
-          `;
-          list.appendChild(li);
+        await apiFetch('/api/rag/kb/orden', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orden })
         });
+        showToast('Orden actualizado. El agente ya consulta con la nueva prioridad.', 'success');
+        await loadKb();
       } catch (err) {
-        list.innerHTML = `<li class="doc-empty" style="color:var(--error);">
-          ⚠️ Error: ${escHtml(err.message)}
-        </li>`;
-        showToast(`Error cargando documentos (${perfil}): ` + err.message, 'error');
+        showToast('Error cambiando el orden: ' + err.message, 'error');
+      }
+    }
+
+    function renderKb(kb) {
+      const grid = document.getElementById('kb-grid');
+      grid.innerHTML = '';
+
+      kb.categorias.forEach(cat => {
+        const c = cat.categoria;
+        if (!(c in selectedFiles)) selectedFiles[c] = [];
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="card-header">
+            <div class="card-title">
+              <span class="orden-pos">${cat.posicion}</span>
+              ${escHtml(cat.etiqueta)}
+              <span class="profile-badge">${escHtml(c)}</span>
+            </div>
+            <span class="text-muted" style="font-size:12px;">
+              ${cat.total_fragmentos.toLocaleString('es-ES')} fragmentos
+            </span>
+          </div>
+          <div class="card-body">
+            <ul class="doc-list" id="doc-list-${c}"></ul>
+
+            <div class="upload-zone" id="drop-${c}"
+                 ondragover="handleDragOver(event,'${c}')"
+                 ondragleave="handleDragLeave(event,'${c}')"
+                 ondrop="handleDrop(event,'${c}')">
+              <input type="file" multiple accept=".pdf,.txt,.md"
+                     id="file-input-${c}"
+                     onchange="handleFileSelect(event,'${c}')">
+              <span class="upload-zone-icon">📂</span>
+              <div class="upload-zone-text">Arrastra archivos o haz clic para seleccionar</div>
+              <div class="upload-zone-hint">PDF, TXT, MD · múltiples archivos</div>
+            </div>
+            <div class="upload-file-list" id="upload-list-${c}"></div>
+            <div class="progress-bar" id="progress-${c}">
+              <div class="progress-fill" id="progress-fill-${c}"></div>
+            </div>
+            <div class="upload-actions">
+              <button class="btn btn-success" id="upload-btn-${c}"
+                      onclick="uploadFiles('${c}')" disabled>⬆ Subir documentos</button>
+              <button class="btn btn-ghost" id="clear-btn-${c}"
+                      onclick="clearUploadSelection('${c}')" disabled>Limpiar</button>
+            </div>
+          </div>`;
+        grid.appendChild(card);
+        renderDocumentos(cat);
+        // La tarjeta se redibuja entera en cada recarga: sin esto, los archivos
+        // ya elegidos y aún sin subir seguirían en `selectedFiles` pero sin
+        // ningún chip a la vista.
+        renderUploadList(c);
+      });
+    }
+
+    function renderDocumentos(cat) {
+      const list = document.getElementById(`doc-list-${cat.categoria}`);
+      if (cat.documentos.length === 0) {
+        list.innerHTML = `<li class="doc-empty"><span>📭</span> Sin documentos indexados</li>`;
+        return;
+      }
+
+      list.innerHTML = '';
+      cat.documentos.forEach(doc => {
+        const li = document.createElement('li');
+        li.className = 'doc-item' + (doc.activo ? '' : ' doc-item-retirado');
+        const autoria = doc.subido_por
+          ? `${escHtml(doc.subido_por)} · ${formatTimestamp(doc.subido_en)}`
+          : 'indexado por seed';
+        li.innerHTML = `
+          <span class="doc-item-name" title="${escHtml(doc.archivo)}">
+            ${doc.activo ? '📄' : '🚫'} ${escHtml(doc.archivo)}
+            <small class="doc-item-meta">${doc.fragmentos} frag. · ${autoria}</small>
+          </span>`;
+
+        // Los botones se enganchan por closure y no con onclick="…": el nombre
+        // del archivo lo pone quien sube el documento, y un apóstrofo dentro de
+        // un onclick interpolado rompe el botón (escaparlo como entidad HTML no
+        // arregla nada, porque el navegador lo decodifica antes de parsear el JS).
+        const btnToggle = document.createElement('button');
+        btnToggle.className = 'btn btn-ghost doc-toggle-btn';
+        btnToggle.textContent = doc.activo ? 'Retirar' : 'Reactivar';
+        btnToggle.title = doc.activo
+          ? 'Retirar de las consultas (reversible)'
+          : 'Volver a ponerlo en juego';
+        btnToggle.addEventListener('click', () =>
+          toggleDocumento(cat.categoria, doc.archivo, !doc.activo));
+
+        const btnBorrar = document.createElement('button');
+        btnBorrar.className = 'doc-delete-btn';
+        btnBorrar.textContent = '🗑';
+        btnBorrar.title = 'Eliminar de ChromaDB (hay que reindexar para recuperarlo)';
+        btnBorrar.addEventListener('click', () =>
+          deleteDocument(cat.categoria, doc.archivo, btnBorrar));
+
+        li.append(btnToggle, btnBorrar);
+        list.appendChild(li);
+      });
+    }
+
+    async function toggleDocumento(categoria, archivo, activo) {
+      try {
+        await apiFetch(`/api/rag/kb/${categoria}/${encodeURIComponent(archivo)}/activo`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activo })
+        });
+        showToast(activo ? `"${archivo}" vuelve a consultarse.` : `"${archivo}" retirado de las consultas.`, 'success');
+        await loadKb();
+      } catch (err) {
+        showToast('Error cambiando el estado: ' + err.message, 'error');
       }
     }
 
     async function deleteDocument(perfil, filename, btn) {
-      if (!confirm(`¿Eliminar "${filename}" de ${perfil}?`)) return;
+      if (!confirm(
+        `¿Eliminar "${filename}" de ChromaDB?\n\n` +
+        `Se borran todos sus fragmentos y recuperarlo obliga a reindexar el archivo entero.\n` +
+        `Si solo quieres que deje de usarse, usa "Retirar".`
+      )) return;
       btn.disabled = true;
       btn.textContent = '⏳';
       try {
@@ -1282,7 +1461,7 @@
           method: 'DELETE'
         });
         showToast(`Documento eliminado: ${filename}`, 'success');
-        await loadDocuments(perfil);
+        await loadKb();
       } catch (err) {
         btn.disabled = false;
         btn.textContent = '🗑';
@@ -1375,10 +1554,14 @@
       progressBar.classList.add('visible');
       progressFill.style.width = '10%';
 
+      // El campo se llama 'files', sin corchetes: es el nombre del parámetro
+      // en `subir_documentos(files: List[UploadFile])`. Con 'files[]' FastAPI no
+      // encuentra el campo y responde 422 sin subir nada.
       const formData = new FormData();
-      files.forEach(f => formData.append('files[]', f));
+      files.forEach(f => formData.append('files', f));
 
       try {
+        const token = await window.__token?.();
         const xhr = new XMLHttpRequest();
         await new Promise((resolve, reject) => {
           xhr.upload.onprogress = e => {
@@ -1396,6 +1579,8 @@
           };
           xhr.onerror = () => reject(new Error('Error de red'));
           xhr.open('POST', `${BASE_URL}/api/rag/upload/${perfil}`);
+          // XHR no pasa por apiFetch, así que el token se pone aquí a mano.
+          if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
           xhr.send(formData);
         });
 
@@ -1407,7 +1592,7 @@
 
         showToast(`${files.length} archivo(s) subido(s) correctamente a ${perfil}`, 'success');
         clearUploadSelection(perfil);
-        await loadDocuments(perfil);
+        await loadKb();
       } catch (err) {
         progressBar.classList.remove('visible');
         progressFill.style.width = '0%';
@@ -1607,8 +1792,7 @@
     async function refreshAll() {
       await loadStats();
       await Promise.all([
-        loadDocuments('profesores'),
-        loadDocuments('alumnos')
+        loadKb()
       ]);
 
       // Refresh active tab content
@@ -1629,7 +1813,50 @@
       }, REFRESH_INTERVAL_MS);
     }
 
-    init();
+    // El arranque lo dispara el módulo de sesión de abajo, cuando ya hay token:
+    // llamar a init() aquí lanzaría toda la carga sin credenciales y el panel se
+    // llenaría de 401 antes de que Keycloak hubiera contestado.
+    window.__initPanel = init;
+  </script>
+
+  <script type="module">
+    // ── Sesión ────────────────────────────────────────────────────────────────
+    // Mismo Keycloak, mismo realm y mismos roles que Guardias y Accesos.
+    import { iniciarSesion, cerrarSesion, apiFetch, token, sesion } from '/static/auth.js';
+
+    window.__fetch = apiFetch;
+    window.__token = token;
+
+    const gate = document.getElementById('gate');
+
+    try {
+      await iniciarSesion();
+    } catch (e) {
+      gate.innerHTML = `<div class="gate-msg">
+        <h2>No se pudo verificar la sesión</h2>
+        <p>${e.message}</p>
+      </div>`;
+      throw e;
+    }
+
+    if (!sesion.esAdmin) {
+      // El backend ya rechaza a quien no es dirección; esto solo evita enseñar
+      // un panel entero de botones que van a devolver 403.
+      gate.innerHTML = `<div class="gate-msg">
+        <h2>Sin permisos</h2>
+        <p>
+          Has entrado como <strong>${sesion.email ?? sesion.nombre ?? 'usuario'}</strong>,
+          pero la gestión de la base de conocimiento es de dirección.
+        </p>
+        <p><a href="/">Ir al agente</a></p>
+      </div>`;
+    } else {
+      gate.remove();
+      document.getElementById('usuario-chip').textContent =
+        sesion.nombre ?? sesion.email ?? 'sesión iniciada';
+      document.getElementById('btn-logout').addEventListener('click', () => cerrarSesion());
+      window.__initPanel();
+    }
   </script>
 
 </body>

@@ -9,6 +9,7 @@ delante de las búsquedas web (que pueden devolver blogs o info desactualizada).
 """
 from langchain_core.tools import tool
 from data.data import obtener_coleccion, query_coleccion
+from ._kb import filtro_activos
 
 
 @tool
@@ -44,6 +45,7 @@ def consultar_info_centro(search: str) -> str:
             query=search,
             n_results=6,
             include=["documents", "metadatas", "distances"],
+            where=filtro_activos("centro"),
         )
 
         docs       = resultados["documents"][0] if resultados.get("documents") else []

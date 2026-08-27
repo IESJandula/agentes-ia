@@ -1,5 +1,6 @@
 from langchain_core.tools import tool
 from data.data import obtener_coleccion, query_coleccion
+from ._kb import filtro_activos
 
 # Umbral de distancia semántica — fragmentos con distancia > THRESHOLD se descartan como ruido.
 # En espacio L2/coseno de ChromaDB, 1.2 ≈ relevancia mínima aceptable.
@@ -35,6 +36,7 @@ def guia_alumnado(search: str) -> str:
         query=search,
         n_results=8,
         include=["documents", "metadatas", "distances"],
+        where=filtro_activos("alumnos"),
     )
 
     docs       = resultados["documents"][0] if resultados["documents"] else []

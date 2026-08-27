@@ -723,274 +723,6 @@
     .btn-voice-toggle svg { width: 18px; height: 18px; fill: currentColor; }
 
     /* ═══════════════════════════════════════════════════════
-       RAG / DOCUMENTS PANEL
-    ═══════════════════════════════════════════════════════ */
-    #panel-rag {
-      padding: 2.5rem;
-      max-width: 960px;
-      width: 100%;
-      margin: 0 auto;
-      gap: 1.75rem;
-      overflow-y: auto;
-    }
-
-    .rag-section-header h2 {
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: -0.4px;
-      margin-bottom: 6px;
-      text-wrap: balance;
-    }
-    .rag-section-header p {
-      color: var(--text-dim);
-      font-size: 14px;
-      line-height: 1.55;
-    }
-
-    /* Profile selector cards */
-    .perfil-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-
-    .perfil-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      padding: 18px 20px;
-      border-radius: var(--r-lg);
-      cursor: pointer;
-      transition:
-        border-color var(--t-base) var(--ease-out),
-        background   var(--t-base),
-        box-shadow   var(--t-base);
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    /* Subtle tinted glow on active card */
-    .perfil-card::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(ellipse at 0% 0%, var(--accent-glow), transparent 70%);
-      opacity: 0;
-      transition: opacity var(--t-base);
-      pointer-events: none;
-    }
-
-    .perfil-card:hover { border-color: var(--border-md); }
-    .perfil-card.active {
-      border-color: rgba(0, 229, 160, 0.32);
-      background: var(--surface-2);
-    }
-    .perfil-card.active::before { opacity: 1; }
-
-    .perfil-card .status {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1.6px;
-      color: var(--text-hint);
-      position: relative;
-    }
-    .perfil-card.active .status { color: var(--accent); }
-
-    .perfil-card h3 {
-      font-size: 16px;
-      font-weight: 700;
-      letter-spacing: -0.2px;
-      position: relative;
-    }
-
-    .perfil-card p {
-      font-size: 12px;
-      color: var(--text-dim);
-      position: relative;
-      line-height: 1.45;
-      margin-top: 2px;
-    }
-
-    /* Upload zone */
-    .upload-zone {
-      border: 1.5px dashed var(--border-md);
-      border-radius: var(--r-lg);
-      padding: 36px 24px;
-      text-align: center;
-      background: var(--surface);
-      cursor: pointer;
-      transition: border-color var(--t-base), background var(--t-base);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
-    .upload-zone:hover,
-    .upload-zone.dragover {
-      border-color: var(--accent);
-      background: rgba(0, 229, 160, 0.04);
-    }
-
-    .upload-icon {
-      width: 48px;
-      height: 48px;
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      border-radius: var(--r-md);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-hint);
-      transition: all var(--t-base) var(--ease-out);
-    }
-    .upload-zone:hover .upload-icon {
-      background: var(--accent);
-      color: var(--bg);
-      border-color: var(--accent);
-      transform: translateY(-3px);
-    }
-    .upload-icon svg { width: 22px; height: 22px; fill: currentColor; }
-
-    .upload-text h4 {
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: -0.1px;
-    }
-    .upload-text p {
-      font-size: 13px;
-      color: var(--text-dim);
-      margin-top: 4px;
-      line-height: 1.4;
-    }
-
-    .btn-submit-upload {
-      background: var(--accent);
-      color: var(--bg);
-      border: none;
-      padding: 9px 22px;
-      border-radius: var(--r-md);
-      font-weight: 700;
-      font-size: 14px;
-      font-family: inherit;
-      cursor: pointer;
-      transition: background var(--t-fast), transform var(--t-fast) var(--ease-spring);
-      display: none;
-    }
-    .btn-submit-upload.visible { display: block; }
-    .btn-submit-upload:hover   { background: var(--accent-hover); transform: scale(1.02); }
-    .btn-submit-upload:active  { transform: scale(0.97); }
-
-    .progress-container {
-      width: 100%;
-      max-width: 280px;
-      height: 3px;
-      background: var(--surface-3);
-      border-radius: 2px;
-      overflow: hidden;
-      display: none;
-    }
-    .progress-container.visible { display: block; }
-    .progress-fill {
-      height: 100%;
-      background: var(--accent);
-      width: 0%;
-      transition: width 0.3s var(--ease-out);
-    }
-
-    /* Document list */
-    .docs-list-container {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--r-lg);
-      overflow: hidden;
-    }
-
-    .docs-list-header {
-      padding: 14px 20px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .docs-list-header h3 {
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: -0.1px;
-    }
-
-    .doc-badge {
-      background: var(--surface-3);
-      color: var(--text-dim);
-      padding: 2px 9px;
-      border-radius: var(--r-xs);
-      font-size: 11px;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .docs-grid { display: grid; padding: 8px; gap: 2px; }
-
-    .doc-row {
-      display: flex;
-      align-items: center;
-      padding: 9px 13px;
-      border-radius: var(--r-sm);
-      transition: background var(--t-fast);
-      gap: 12px;
-    }
-    .doc-row:hover { background: var(--surface-2); }
-
-    .doc-icon-small {
-      width: 31px;
-      height: 31px;
-      background: var(--surface-3);
-      border-radius: var(--r-xs);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-hint);
-      flex-shrink: 0;
-      transition: color var(--t-fast);
-    }
-    .doc-row:hover .doc-icon-small { color: var(--accent); }
-
-    .doc-info { flex: 1; min-width: 0; }
-    .doc-title {
-      font-size: 13.5px;
-      font-weight: 500;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      color: var(--text);
-    }
-
-    .btn-delete-doc {
-      background: none;
-      border: none;
-      color: var(--text-hint);
-      cursor: pointer;
-      padding: 5px;
-      border-radius: var(--r-xs);
-      transition: color var(--t-fast), background var(--t-fast);
-      flex-shrink: 0;
-    }
-    .btn-delete-doc:hover {
-      color: var(--danger);
-      background: rgba(255, 34, 85, 0.08);
-    }
-
-    .empty-state {
-      padding: 40px;
-      text-align: center;
-      color: var(--text-hint);
-      font-size: 13px;
-      line-height: 1.6;
-    }
-
-    /* ═══════════════════════════════════════════════════════
        TOAST
     ═══════════════════════════════════════════════════════ */
     #toast {
@@ -1061,8 +793,51 @@
       .input-wrapper { border-radius: var(--r-lg); }
       .bubble { max-width: 100%; }
 
-      #panel-rag { padding: 1.5rem; }
-      .perfil-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       SESIÓN
+    ═══════════════════════════════════════════════════════ */
+    .usuario-chip {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-dim);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 4px 12px;
+      max-width: 190px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .gate {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .gate-msg {
+      max-width: 460px;
+      text-align: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: 36px;
+      box-shadow: var(--shadow-md);
+    }
+
+    .gate-msg h2 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .gate-msg p  { font-size: 14px; color: var(--text-dim); }
+
+    @media (max-width: 900px) {
+      .usuario-chip { display: none; }
     }
   </style>
 </head>
@@ -1089,7 +864,9 @@
     <nav id="main-nav">
       <div class="nav-tabs">
         <button type="button" class="tab-btn active" id="tab-chat" onclick="switchTab('chat')">Chat</button>
-        <button type="button" class="tab-btn" id="tab-rag" onclick="switchTab('rag')">Documentos</button>
+        <!-- La gestión de documentos vive ahora en /admin, tras el rol de
+             dirección. Este enlace solo aparece a quien puede usarlo. -->
+        <a class="tab-btn" id="tab-rag" href="/admin" style="display:none">Base de conocimiento</a>
       </div>
 
       <button type="button" class="btn-new-chat" onclick="newChat()">
@@ -1104,14 +881,27 @@
       <div class="perfil-chat">
         <label for="perfilChatSelect">Acceso</label>
         <div class="custom-select">
-          <select id="perfilChatSelect" onchange="syncPerfilFromChat(this.value)">
+          <select id="perfilChatSelect">
             <option value="profesores">Profesores</option>
             <option value="alumnos">Alumnos</option>
           </select>
         </div>
       </div>
+
+      <span class="usuario-chip" id="usuario-chip">…</span>
+      <button type="button" class="tab-btn" id="btn-logout" title="Cerrar sesión">Salir</button>
     </nav>
   </header>
+
+  <!-- Cortina de sesión: tapa la página hasta que Keycloak confirma quién entra.
+       Va en el HTML y no la pinta el JS a propósito: si el módulo de sesión
+       fallara al cargar, lo que queda a la vista es esto y no el chat abierto. -->
+  <div class="gate" id="gate">
+    <div class="gate-msg">
+      <h2>Comprobando sesión…</h2>
+      <p>Un momento.</p>
+    </div>
+  </div>
 
   <main>
     <!-- CHAT PANEL -->
@@ -1172,67 +962,17 @@
       </div>
     </div>
 
-    <!-- RAG PANEL -->
-    <div class="tab-panel" id="panel-rag">
-      <div class="rag-section-header">
-        <h2>Base de conocimiento</h2>
-        <p>Gestiona los documentos que el agente usa para responder. Selecciona una colección para ver o subir archivos.</p>
-      </div>
-
-      <div class="perfil-grid">
-        <div class="perfil-card active" id="card-profesores" onclick="selectPerfil('profesores')">
-          <div class="status">Colección</div>
-          <h3>Profesores</h3>
-          <p>Normativas internas, guías docentes y protocolos del centro.</p>
-        </div>
-        <div class="perfil-card" id="card-alumnos" onclick="selectPerfil('alumnos')">
-          <div class="status">Colección</div>
-          <h3>Alumnos</h3>
-          <p>Calendarios, actividades y recursos para el alumnado.</p>
-        </div>
-      </div>
-
-      <input type="file" id="fileInput" accept=".pdf,.txt,.md" style="display:none" multiple
-        onchange="onFileSelected(event)" />
-
-      <div class="upload-zone" id="uploadZone" onclick="openFilePicker()" ondragover="onDragOver(event)"
-        ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
-        <div class="upload-icon">
-          <svg viewBox="0 0 24 24">
-            <path
-              d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z" />
-          </svg>
-        </div>
-        <div class="upload-text">
-          <h4 id="uploadLabel">Subir a Profesores</h4>
-          <p>Arrastra archivos o haz clic — PDF, TXT o Markdown</p>
-          <div id="uploadFilename"
-            style="margin-top: 8px; color: var(--accent); font-size: 13px; font-weight: 600;"></div>
-        </div>
-        <div class="progress-container" id="progressWrap">
-          <div class="progress-fill" id="progressBar"></div>
-        </div>
-        <button type="button" class="btn-submit-upload" id="btnUpload" onclick="uploadFile(event)">
-          Subir documento
-        </button>
-      </div>
-
-      <div class="docs-list-container">
-        <div class="docs-list-header">
-          <h3 id="docsTitle">Archivos en Profesores</h3>
-          <div class="doc-badge" id="docCount">0</div>
-        </div>
-        <div id="docsContainer">
-          <div class="empty-state">Cargando biblioteca...</div>
-        </div>
-      </div>
-    </div>
   </main>
 
   <div id="toast"></div>
 
   <script>
     const API = window.location.origin;
+
+    /* window.__fetch lo instala el módulo de sesión del final: añade el Bearer y
+       lo renueva si está a punto de caducar. Se resuelve en cada llamada, no al
+       cargar, porque este script clásico corre antes que el módulo. */
+    const authFetch = (url, opciones) => (window.__fetch ?? fetch)(url, opciones);
 
     marked.setOptions({ breaks: true, gfm: true, headerIds: false, mangle: false });
 
@@ -1255,12 +995,10 @@
       document.getElementById(`tab-${tab}`).classList.add('active');
       document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
       document.getElementById(`panel-${tab}`).classList.add('active');
-      if (tab === 'rag') loadDocuments();
       document.getElementById('main-nav').classList.remove('open');
       document.getElementById('menu-icon').innerHTML = '<path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>';
     }
 
-    function syncPerfilFromChat(val) { selectPerfil(val); }
 
     /* ══════════════════════════════
        CHAT LOGIC
@@ -1467,7 +1205,7 @@
       let herramientaActiva = null;
 
       try {
-        const res = await fetch(`${API}/api/chat/stream`, {
+        const res = await authFetch(`${API}/api/chat/stream`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pregunta: text, perfil, thread_id: SESSION_ID })
@@ -1621,7 +1359,7 @@
 
       try {
         const endpoint = isVoiceResponseEnabled ? '/api/speak' : '/api/transcribe';
-        const res = await fetch(`${API}${endpoint}`, { method: 'POST', body: fd });
+        const res = await authFetch(`${API}${endpoint}`, { method: 'POST', body: fd });
         removeTyping();
 
         if (res.ok) {
@@ -1650,188 +1388,6 @@
     }
 
     /* ══════════════════════════════
-       RAG / DOCUMENT MANAGEMENT
-    ══════════════════════════════ */
-    let currentPerfil = 'profesores';
-    let selectedFile = [];
-
-    function selectPerfil(perfil) {
-      currentPerfil = perfil;
-      document.querySelectorAll('.perfil-card').forEach(card => card.classList.remove('active'));
-      document.getElementById(`card-${perfil}`).classList.add('active');
-      document.getElementById('perfilChatSelect').value = perfil;
-      document.getElementById('uploadLabel').textContent = `Subir a ${perfil.charAt(0).toUpperCase() + perfil.slice(1)}`;
-      document.getElementById('docsTitle').textContent = `Archivos en ${perfil.charAt(0).toUpperCase() + perfil.slice(1)}`;
-      resetUpload();
-      loadDocuments();
-    }
-
-    function resetUpload() {
-      selectedFile = [];
-      document.getElementById('fileInput').value = '';
-      document.getElementById('uploadFilename').textContent = '';
-      document.getElementById('btnUpload').classList.remove('visible');
-      document.getElementById('progressWrap').classList.remove('visible');
-      document.getElementById('progressBar').style.width = '0%';
-    }
-
-    function openFilePicker() { document.getElementById('fileInput').click(); }
-
-    function onFileSelected(e) {
-      const files = Array.from(e.target.files);
-      if (files.length > 0) handleFileSelection(files);
-    }
-
-    function onDragOver(e) { e.preventDefault(); document.getElementById('uploadZone').classList.add('dragover'); }
-    function onDragLeave() { document.getElementById('uploadZone').classList.remove('dragover'); }
-    function onDrop(e) {
-      e.preventDefault();
-      document.getElementById('uploadZone').classList.remove('dragover');
-      const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0) handleFileSelection(files);
-    }
-
-    function handleFileSelection(files) {
-      const allowed = ['pdf', 'txt', 'md'];
-      const validos = files.filter(f => allowed.includes(f.name.split('.').pop().toLowerCase()));
-      const invalidos = files.filter(f => !allowed.includes(f.name.split('.').pop().toLowerCase()));
-
-      if (invalidos.length > 0) {
-        showToast(`Formato no soportado: ${invalidos.map(f => f.name).join(', ')}`, "error");
-      }
-      if (validos.length === 0) return;
-
-      selectedFile = validos;
-      const label = validos.length === 1
-        ? `Seleccionado: ${validos[0].name}`
-        : `${validos.length} archivos seleccionados`;
-      document.getElementById('uploadFilename').textContent = label;
-      document.getElementById('btnUpload').classList.add('visible');
-    }
-
-    async function uploadFile(e) {
-      e.stopPropagation();
-      if (!selectedFile || selectedFile.length === 0) return;
-
-      const btn = document.getElementById('btnUpload');
-      const prog = document.getElementById('progressWrap');
-      const bar = document.getElementById('progressBar');
-
-      btn.disabled = true;
-      btn.textContent = "Procesando...";
-      prog.classList.add('visible');
-
-      let p = 0;
-      const interval = setInterval(() => {
-        p = Math.min(p + 5, 90);
-        bar.style.width = p + '%';
-      }, 150);
-
-      const fd = new FormData();
-      selectedFile.forEach(f => fd.append('files', f));
-
-      try {
-        const res = await fetch(`${API}/api/rag/upload/${currentPerfil}`, { method: 'POST', body: fd });
-        clearInterval(interval);
-        bar.style.width = '100%';
-
-        if (res.ok) {
-          const data = await res.json();
-          const totalFragmentos = data.resultados
-            .filter(r => r.status === 'success')
-            .reduce((acc, r) => acc + (r.fragmentos || 0), 0);
-          const msg = data.fallidos > 0
-            ? `${data.exitosos}/${data.total} subidos. ${data.fallidos} fallaron.`
-            : `${data.exitosos} archivo(s) indexados en ${totalFragmentos} fragmentos.`;
-          showToast(msg, data.fallidos > 0 ? "error" : "success");
-          resetUpload();
-          loadDocuments();
-        } else {
-          const data = await res.json();
-          showToast(`Error: ${data.detail || 'Fallo en la subida'}`, "error");
-          resetUpload();
-        }
-      } catch {
-        clearInterval(interval);
-        showToast("Error de conexión al subir el archivo.", "error");
-        resetUpload();
-      } finally {
-        btn.textContent = "Subir documento";
-        btn.disabled = false;
-      }
-    }
-
-    async function loadDocuments() {
-      const container = document.getElementById('docsContainer');
-      container.innerHTML = '<div class="empty-state">Sincronizando biblioteca...</div>';
-      try {
-        const res = await fetch(`${API}/api/rag/documents/${currentPerfil}`);
-        if (res.ok) {
-          const data = await res.json();
-          renderDocs(data.documentos || []);
-        } else {
-          container.innerHTML = '<div class="empty-state">Error al cargar los documentos del servidor.</div>';
-        }
-      } catch {
-        container.innerHTML = '<div class="empty-state">No se pudo conectar con el servicio RAG.</div>';
-      }
-    }
-
-    function renderDocs(docs) {
-      const container = document.getElementById('docsContainer');
-      document.getElementById('docCount').textContent = docs.length;
-
-      if (docs.length === 0) {
-        container.innerHTML = '<div class="empty-state">Esta colección está vacía.<br>Sube documentos para empezar.</div>';
-        return;
-      }
-
-      let html = '<div class="docs-grid">';
-      docs.forEach(name => {
-        html += `
-          <div class="doc-row">
-            <div class="doc-icon-small">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/>
-                <polyline points="14 2 14 8 20 8"/>
-              </svg>
-            </div>
-            <div class="doc-info">
-              <div class="doc-title" title="${escHtml(name)}">${escHtml(name)}</div>
-            </div>
-            <button class="btn-delete-doc" onclick="deleteDocument('${escHtml(name)}')"
-              title="Eliminar documento" aria-label="Eliminar ${escHtml(name)}">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
-              </svg>
-            </button>
-          </div>`;
-      });
-      html += '</div>';
-      container.innerHTML = html;
-    }
-
-    async function deleteDocument(name) {
-      if (!confirm(`¿Eliminar "${name}"? Esta acción no se puede deshacer.`)) return;
-      try {
-        const res = await fetch(`${API}/api/rag/documents/${currentPerfil}/${encodeURIComponent(name)}`, { method: 'DELETE' });
-        if (res.ok) {
-          showToast("Documento eliminado.", "success");
-          loadDocuments();
-        } else {
-          const data = await res.json();
-          showToast(`Error: ${data.detail || 'No se pudo eliminar'}`, "error");
-        }
-      } catch {
-        showToast("Error de conexión.", "error");
-      }
-    }
-
-    /* ══════════════════════════════
        UTILS
     ══════════════════════════════ */
     let toastTimer = null;
@@ -1843,7 +1399,37 @@
       toastTimer = setTimeout(() => el.className = '', 4000);
     }
 
-    loadDocuments();
+  </script>
+
+  <script type="module">
+    /* ══════════════════════════════
+       SESIÓN
+       Mismo Keycloak, mismo realm y mismos roles que Guardias y Accesos: quien
+       ya entró en una de esas aplicaciones entra aquí sin pulsar nada.
+    ══════════════════════════════ */
+    import { iniciarSesion, cerrarSesion, apiFetch, token, sesion } from '/static/auth.js';
+
+    window.__fetch = apiFetch;
+    window.__token = token;
+
+    const gate = document.getElementById('gate');
+
+    try {
+      await iniciarSesion();
+    } catch (e) {
+      gate.innerHTML = `<div class="gate-msg">
+        <h2>No se pudo verificar la sesión</h2><p>${e.message}</p></div>`;
+      throw e;
+    }
+
+    gate.remove();
+    document.getElementById('usuario-chip').textContent =
+      sesion.nombre ?? sesion.email ?? 'sesión iniciada';
+    document.getElementById('btn-logout').addEventListener('click', () => cerrarSesion());
+
+    // El enlace al panel solo se enseña a quien tiene rol de dirección; el
+    // backend lo comprueba igualmente en cada petición.
+    if (sesion.esAdmin) document.getElementById('tab-rag').style.display = '';
   </script>
 </body>
 

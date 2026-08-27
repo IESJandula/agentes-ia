@@ -1,0 +1,9 @@
+keycloak-js 26.2.4
+
+Copia literal de la libreria oficial que usa vegaies (misma version).
+Se vendoriza porque el front del agente es HTML servido tal cual, sin build
+ni npm: no hay forma de resolver el paquete en tiempo de compilacion, y traerlo
+de un CDN metaria una dependencia externa en el camino critico del login.
+
+Para actualizarla, copiar lib/keycloak.js de la MISMA version que use vegaies:
+si los dos frontales hablan con el mismo realm, conviene que hablen igual.

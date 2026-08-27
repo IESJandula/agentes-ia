@@ -6,6 +6,10 @@ pydantic
 gunicorn
 python-multipart
 
+# --- Autenticación (Keycloak, mismo realm que vegaies) ---
+# El extra [crypto] trae `cryptography`, necesaria para verificar RS256.
+pyjwt[crypto]
+
 # --- Framework de IA y Orquestación ---
 langchain
 langchain-core

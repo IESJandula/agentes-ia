@@ -25,6 +25,21 @@ class AgentsService:
             print(f"✅ Agente {clave} listo.")
         return self._agentes[clave]
 
+    def invalidar_agentes(self) -> int:
+        """Descarta los agentes cacheados para que se reconstruyan a la siguiente
+        consulta.
+
+        Hace falta cuando cambia el ORDEN de las fuentes: tanto la lista de tools
+        como el bloque de prioridad del prompt se congelan al construir el grafo,
+        así que sin esto el panel diría una cosa y el agente en memoria seguiría
+        haciendo otra hasta el próximo redeploy.
+        """
+        n = len(self._agentes)
+        self._agentes.clear()
+        if n:
+            print(f"♻️ [AGENTES] {n} agente(s) descartado(s): se reconstruirán con la nueva configuración.")
+        return n
+
     async def procesar_chat(
         self,
         pregunta: str,

@@ -326,7 +326,7 @@ print(f"📊 [DATABASE] Conocimiento web aprendido: {_contar_embeddings_sqlite(p
 # Helpers internos
 # ---------------------------------------------------------------------------
 
-def query_coleccion(coleccion, query: str, n_results: int = 8, include=None):
+def query_coleccion(coleccion, query: str, n_results: int = 8, include=None, where=None):
     """
     Realiza una búsqueda semántica en una colección ChromaDB evitando el error
     'float object has no attribute tolist' que ocurre cuando ChromaDB intenta
@@ -334,6 +334,12 @@ def query_coleccion(coleccion, query: str, n_results: int = 8, include=None):
 
     Solución: calculamos el embedding nosotros y lo pasamos como query_embeddings
     (List[List[float]]) en lugar de usar query_texts (que delega en ChromaDB).
+
+    ``where`` es un filtro de metadatos de ChromaDB. Lo usan las tools para
+    excluir los documentos retirados desde el panel. Se aplica DENTRO de la
+    consulta, no después: filtrar a posteriori se comería resultados del top-k
+    y retirar un documento haría que la respuesta perdiera fragmentos en vez de
+    sustituirlos por los siguientes mejores.
     """
     if include is None:
         include = ["documents", "metadatas", "distances"]
@@ -342,11 +348,14 @@ def query_coleccion(coleccion, query: str, n_results: int = 8, include=None):
     vector: list[float] = embedding_fn.embed_query(query)
 
     # ChromaDB espera query_embeddings: List[List[float]]
-    return coleccion.query(
-        query_embeddings=[vector],
-        n_results=n_results,
-        include=include,
-    )
+    kwargs = {
+        "query_embeddings": [vector],
+        "n_results": n_results,
+        "include": include,
+    }
+    if where:
+        kwargs["where"] = where
+    return coleccion.query(**kwargs)
 
 
 def _get_fresh_collection(nombre_coleccion: str):
@@ -894,40 +903,68 @@ def subir_nuevo_documento(file_path: str, perfil: str, nombre_original: str = No
         return {"status": "error", "message": str(e)}
 
 
+def contar_fragmentos_por_documento(perfil: str) -> dict[str, int]:
+    """
+    Devuelve ``{nombre_archivo: nº de fragmentos}`` para la colección del perfil.
+
+    Usa SQLite directo para evitar cargar el índice HNSW completo en memoria
+    (collection.get() con 40k+ embeddings bloquea varios minutos).
+
+    El JOIN por colección NO es opcional: sin él, un ``SELECT`` plano de
+    ``embedding_metadata`` devuelve los 'source' de TODAS las colecciones
+    mezclados, y el panel acaba enseñando la legislación dentro de la guía del
+    alumnado. Es el mismo JOIN que ya usa ``_seed_carpeta`` para deduplicar.
+    """
+    nombre_coleccion = _PERFIL_A_COLECCION.get(perfil)
+    if not nombre_coleccion:
+        raise ValueError(f"Perfil desconocido: '{perfil}'.")
+
+    try:
+        import sqlite3 as _sq
+        _c = _sq.connect(os.path.join(persist_db_path, "chroma.sqlite3"), timeout=15)
+        try:
+            rows = _c.execute(
+                """
+                SELECT em.string_value, COUNT(*)
+                FROM embedding_metadata em
+                JOIN embeddings e   ON e.id = em.id
+                JOIN segments s     ON s.id = e.segment_id
+                JOIN collections c  ON c.id = s.collection
+                WHERE em.key = 'source' AND c.name = ?
+                GROUP BY em.string_value
+                """,
+                (nombre_coleccion,),
+            ).fetchall()
+        finally:
+            _c.close()
+
+        conteo: dict[str, int] = {}
+        for val, n in rows:
+            nombre = os.path.basename(str(val))
+            if nombre:
+                conteo[nombre] = conteo.get(nombre, 0) + int(n)
+        return conteo
+
+    except Exception as e:
+        # Fallback: usar ChromaDB (lento con colecciones grandes, pero correcto).
+        print(f"⚠️ [DATABASE] Conteo por SQLite no disponible ({e}). Fallback a Chroma.")
+        coleccion = obtener_coleccion(perfil)
+        resultado = coleccion.get(include=["metadatas"])
+        conteo = {}
+        for meta in (resultado or {}).get("metadatas") or []:
+            if meta and "source" in meta:
+                nombre = os.path.basename(str(meta["source"]))
+                if nombre:
+                    conteo[nombre] = conteo.get(nombre, 0) + 1
+        return conteo
+
+
 def listar_documentos_en_coleccion(perfil: str) -> list[str]:
     """
     Devuelve una lista ordenada de nombres de archivo únicos presentes
     en la colección del perfil indicado.
-
-    Usa SQLite directo para evitar cargar el índice HNSW completo en memoria
-    (collection.get() con 40k+ embeddings bloquea varios minutos).
     """
-    try:
-        import sqlite3 as _sq
-        _c = _sq.connect(os.path.join(persist_db_path, "chroma.sqlite3"), timeout=10)
-        rows = _c.execute(
-            "SELECT DISTINCT string_value FROM embedding_metadata WHERE key='source'"
-        ).fetchall()
-        _c.close()
-        archivos = set()
-        for (val,) in rows:
-            nombre = os.path.basename(str(val))
-            if nombre:
-                archivos.add(nombre)
-        return sorted(list(archivos))
-    except Exception:
-        # Fallback: usar ChromaDB (lento con colecciones grandes)
-        coleccion = obtener_coleccion(perfil)
-        resultado = coleccion.get(include=["metadatas"])
-        if not resultado or not resultado.get("metadatas"):
-            return []
-        archivos = set()
-        for meta in resultado["metadatas"]:
-            if meta and "source" in meta:
-                nombre = os.path.basename(str(meta["source"]))
-                if nombre:
-                    archivos.add(nombre)
-        return sorted(list(archivos))
+    return sorted(contar_fragmentos_por_documento(perfil).keys())
 
 
 def eliminar_documento_de_coleccion(perfil: str, nombre_archivo: str) -> dict:

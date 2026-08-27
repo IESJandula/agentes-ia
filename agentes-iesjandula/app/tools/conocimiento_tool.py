@@ -5,6 +5,7 @@ a partir de búsquedas web previas. Actúa como caché semántico persistente.
 """
 from langchain_core.tools import tool
 from data.data import obtener_coleccion, query_coleccion
+from ._kb import filtro_activos
 
 
 @tool
@@ -38,6 +39,7 @@ def consultar_conocimiento_aprendido(search: str) -> str:
             query=search,
             n_results=6,
             include=["documents", "metadatas", "distances"],
+            where=filtro_activos("conocimiento"),
         )
 
         docs       = resultados["documents"][0] if resultados.get("documents") else []

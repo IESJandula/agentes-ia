@@ -1,14 +1,20 @@
 import json
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File
 from fastapi.responses import StreamingResponse
 from app.api.controllers import AgenteController
 from app.api.models import ConsultaRequest, ConsultaResponse
+from app.auth import requiere_consulta
+
+#: La dependencia va endpoint a endpoint y no en el router entero para dejar
+#: '/health' abierto: lo consulta el HEALTHCHECK del contenedor, que no tiene
+#: (ni debe tener) credenciales.
+_auth = Depends(requiere_consulta)
 
 router = APIRouter(tags=["Agente"])
 
 
 @router.post("/chat", response_model=ConsultaResponse)
-async def consultar_agente(consulta: ConsultaRequest):
+async def consultar_agente(consulta: ConsultaRequest, _=_auth):
     return await AgenteController.handle_chat(
         consulta.pregunta,
         perfil=consulta.perfil,
@@ -17,7 +23,7 @@ async def consultar_agente(consulta: ConsultaRequest):
 
 
 @router.post("/chat/stream")
-async def stream_agente(consulta: ConsultaRequest):
+async def stream_agente(consulta: ConsultaRequest, _=_auth):
     """Endpoint SSE: devuelve la respuesta token a token."""
     async def generator():
         async for evento in AgenteController.handle_chat_stream(
@@ -38,12 +44,12 @@ async def stream_agente(consulta: ConsultaRequest):
 
 
 @router.post("/speak")
-async def consultar_agente_voz(audio_file: UploadFile = File(...), perfil: str = "profesores"):
+async def consultar_agente_voz(audio_file: UploadFile = File(...), perfil: str = "profesores", _=_auth):
     return await AgenteController.handle_speak(audio_file, perfil=perfil)
 
 
 @router.post("/transcribe")
-async def consultar_agente_hibrido(audio_file: UploadFile = File(...), perfil: str = "profesores"):
+async def consultar_agente_hibrido(audio_file: UploadFile = File(...), perfil: str = "profesores", _=_auth):
     return await AgenteController.handle_transcribe(audio_file, perfil=perfil)
 
 

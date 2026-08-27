@@ -23,6 +23,15 @@ En Coolify, ve a **Environment Variables** y configura:
 GOOGLE_API_KEY=tu_google_api_key
 TAVILY_API_KEY=tu_tavily_api_key
 
+# 🔐 REQUERIDAS - Autenticación (Keycloak, mismo realm que Guardias y Accesos)
+# Sin esto la app arranca pero NADA responde: no hay modo sin autenticación.
+# KEYCLOAK_ISSUER debe ser EXACTAMENTE el mismo valor que usan core-data y
+# accesos-api, o el token de un profesor no valdrá aquí.
+KEYCLOAK_ISSUER=https://sso.tucentro.es/realms/vegaies
+KEYCLOAK_URL=https://sso.tucentro.es
+KEYCLOAK_REALM=vegaies
+KEYCLOAK_CLIENT=agentes
+
 # 🗄️ ChromaDB Remoto - IMPORTANTE
 # Opción A: Si ChromaDB está en el mismo host de Coolify
 CHROMA_SERVER_HOST=localhost

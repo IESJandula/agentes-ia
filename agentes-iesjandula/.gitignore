@@ -72,4 +72,5 @@ data/legislacion/*.PDF
 
 # --- Runtime / Stats ---
 data/usage_stats.json
+data/kb_config.json
 data/checkpoints.db

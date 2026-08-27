@@ -152,6 +152,37 @@ async def api_root():
         "servicios": ["Agente Texto/Voz", "RAG"]
     }
 
+
+@app.get("/api/config")
+async def config_publica():
+    """Configuración que el front necesita ANTES de estar autenticado.
+
+    El front es HTML servido tal cual, sin build: no hay forma de inyectarle
+    variables de entorno al estilo `VITE_*` como en vegaies, así que las pide
+    aquí. Es deliberadamente público y no contiene ningún secreto: la URL del
+    Keycloak, el realm y el id de un cliente PÚBLICO son datos que el navegador
+    manda en claro en cada redirección de login.
+    """
+    return {
+        "keycloak": {
+            "url": os.getenv("KEYCLOAK_URL", "http://localhost:8080"),
+            "realm": os.getenv("KEYCLOAK_REALM", "vegaies"),
+            "clientId": os.getenv("KEYCLOAK_CLIENT", "agentes"),
+        }
+    }
+
+
+@app.get("/silent-check-sso.html")
+async def silent_check_sso():
+    """Página del iframe oculto de Keycloak (`check-sso`).
+
+    Sin ella, `onLoad: 'check-sso'` hace una redirección completa al cargar en
+    vez de comprobar la sesión en segundo plano. Es la misma pieza que usa
+    accesos-web y lo que hace que quien ya entró en Guardias entre aquí sin
+    pulsar nada.
+    """
+    return FileResponse("silent-check-sso.html", media_type="text/html")
+
 # IMPORTANTE: Servimos la carpeta estática si existe (para JS, CSS, assets, etc.)
 if os.path.exists("static"):
     app.mount("/static", StaticFiles(directory="static"), name="static")

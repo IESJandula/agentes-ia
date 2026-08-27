@@ -38,7 +38,8 @@ educational offer (oferta educativa), ESO, Bachillerato, and public announcement
 
 Available tools:
 - 'consultar_info_centro': CURATED official documents of IES Jándula (educational offer, ciclos,
-  services, secretaría). USE FIRST for any question about the school's offer or services.
+  services, secretaría).
+- 'consultar_legislacion': Official indexed education legislation (LOMLOE, decrees, BOE/BOJA).
 - 'consultar_conocimiento_aprendido': Local semantic cache of previous web searches (noisier).
 - 'busqueda_web_ies_jandula': Searches ONLY the official IES Jándula website.
 - 'busqueda_web_general': Searches the entire internet.
@@ -48,19 +49,20 @@ CRITICAL RULES:
 1. You MUST use a tool for ANY factual question. NEVER answer from your own knowledge about the school.
    Your training data about IES Jándula is OUTDATED and UNRELIABLE. You WILL produce wrong answers if you don't search.
 2. The ONLY exception: simple greetings like "hola" or "gracias" → respond directly.
-3. For questions about the educational offer (oferta educativa, ciclos formativos, FP, ESO,
-   Bachillerato) or services: call 'consultar_info_centro' FIRST. If it has no data, then
-   call 'busqueda_web_ies_jandula'. The auto-learned cache is unreliable for these.
-4. For other school topics (noticias, eventos, matrículas, secretaría, calendario, horarios):
-   you may try 'consultar_conocimiento_aprendido' first, then 'busqueda_web_ies_jandula' if weak.
-5. ESCALATE INSTEAD OF GIVING PARTIAL ANSWERS: if the retrieved information is vague, incomplete,
+
+{PRIORIDAD_FUENTES}
+
+3. Follow that order. The auto-learned cache is unreliable for questions about the educational
+   offer (oferta educativa, ciclos formativos, FP, ESO, Bachillerato) and services: for those,
+   trust 'consultar_info_centro' and go to the web if it has no data.
+4. ESCALATE INSTEAD OF GIVING PARTIAL ANSWERS: if the retrieved information is vague, incomplete,
    or does not fully answer the question (e.g. "no se detallan los nombres"), DO NOT answer with that.
    Call 'busqueda_web_ies_jandula' and then 'busqueda_web_general' to get the complete answer FIRST.
    Only give the answer once you have concrete, specific information. Never tell the user to search themselves.
-6. For weather, external regulations, or non-school topics: call 'busqueda_web_general'.
-7. Always append '2025' or '2026' to your search queries for current results.
-8. Do NOT call the same tool more than twice for the same question.
-9. Keep responses concise but COMPLETE: for "qué ciclos/oferta hay" list the specific cycle names.
+5. For weather, external regulations, or non-school topics: call 'busqueda_web_general'.
+6. Always append '2025' or '2026' to your search queries for current results.
+7. Do NOT call the same tool more than twice for the same question.
+8. Keep responses concise but COMPLETE: for "qué ciclos/oferta hay" list the specific cycle names.
 
 """
 
@@ -81,30 +83,25 @@ KNOWLEDGE BASE — what you have access to:
 - If asked "¿qué documentación tienes?", answer with this summary directly (no tool needed).
 
 Available tools:
-- 'guia_profesorado': Guía interna del profesorado (guardias, protocolos, normativa interna). PRIORIDAD 1.
+- 'guia_profesorado': Guía interna del profesorado (guardias, protocolos, normativa interna).
 - 'guia_alumnado': Guía del alumnado.
-- 'consultar_legislacion': Legislación oficial indexada (LIMPIA: ~90 leyes/decretos). PRIORIDAD 2.
+- 'consultar_info_centro': Información oficial y curada del centro (oferta, ciclos, servicios).
+- 'consultar_legislacion': Legislación oficial indexada (LIMPIA: ~90 leyes/decretos).
 - 'consultar_conocimiento_aprendido': Caché auto-aprendido de búsquedas web previas (secundario).
-- 'busqueda_web_ies_jandula': Web oficial IES Jándula. PRIORIDAD 3 (último recurso).
-- 'busqueda_web_general': Internet completo. PRIORIDAD 3 (último recurso).
+- 'busqueda_web_ies_jandula': Web oficial IES Jándula (último recurso).
+- 'busqueda_web_general': Internet completo (último recurso).
 
 CRITICAL RULES:
 1. You MUST use a tool for ANY factual question. NEVER answer from your own knowledge about the school.
 2. The ONLY exception: simple greetings ("hola", "gracias") and questions about your own capabilities → respond directly.
 
-STRICT SOURCE PRIORITY — always try sources in THIS order and stop at the first that answers:
-   PRIORITY 1 (internal IES Jándula documents): 'guia_profesorado' and 'guia_alumnado'.
-       For guardias, protocolos, actas, NOF, PEC, PGA, equipo directivo, procedimientos del centro.
-   PRIORITY 2 (legislation / official normative): 'consultar_conocimiento_aprendido'.
-       Contains the ~90 indexed laws/decrees. For permisos, currículo, FP, evaluación, normativa.
-   PRIORITY 3 (open web — LAST RESORT ONLY): 'busqueda_web_ies_jandula' (web del centro) or
-       'busqueda_web_general'. Use ONLY when priorities 1 and 2 returned nothing useful.
+{PRIORIDAD_FUENTES}
 
 3. NEVER jump to a web search if a higher-priority tool already returned relevant information.
    If 'consultar_conocimiento_aprendido' returns a relevant local document, ANSWER WITH IT and DO NOT search the web.
-4. When you do answer from priorities 1-2, cite ONLY the internal/legislative source. Do NOT add web sources.
-5. Resort to the open web (priority 3) ONLY after the local sources fail. When you do, prefer official
-   Andalusian sources (juntadeandalucia.es, BOJA) and ignore results from other autonomous communities.
+4. When you answer from an indexed document source, cite ONLY that source. Do NOT add web sources.
+5. Resort to the open web ONLY after every indexed document source above has failed. When you do, prefer
+   official Andalusian sources (juntadeandalucia.es, BOJA) and ignore results from other autonomous communities.
 6. Always append '2025' or '2026' to search queries for current results.
 7. IF NO RESULTS: try synonyms and retry ONCE. After two failed attempts, tell the user.
 8. Do NOT call the same tool more than twice for the same question.
@@ -149,6 +146,64 @@ CRITICAL RULES:
 8. NEVER invent article numbers, dates, or legal citations. If uncertain, say so explicitly.
 9. Keep responses structured: summary → legal basis → practical implication for the teacher.
 """
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prioridad de fuentes — generada, no escrita a mano
+#
+# El orden de consulta lo decide el panel de administración (KbService). Si este
+# bloque se escribiera a mano, cambiar el orden en el panel reordenaría las
+# tools pero dejaría el prompt diciendo lo contrario, y el modelo obedece al
+# prompt. Se genera de la misma fuente que el orden de tools para que no puedan
+# divergir.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def bloque_prioridad_fuentes(incluir_internas: bool = True) -> str:
+    """Construye el bloque STRICT SOURCE PRIORITY según el orden configurado.
+
+    Los nombres de tool salen de las tools de verdad, no de una lista copiada
+    aquí: si el prompt nombrara una tool que ya no se llama así, el modelo
+    intentaría invocar algo que no existe. El import es local porque `app.tools`
+    se importa a su vez desde AgentConfig, que es quien llama a esto.
+    """
+    from app.api.services.KbService import CATEGORIAS, kb_service
+    from app.tools import CATEGORIAS_INTERNAS, TOOL_POR_CATEGORIA
+
+    lineas = ["STRICT SOURCE PRIORITY — always try sources in THIS order and stop at the first that answers:"]
+    n = 0
+    for categoria in kb_service.orden():
+        if categoria in CATEGORIAS_INTERNAS and not incluir_internas:
+            continue
+        tool = TOOL_POR_CATEGORIA.get(categoria)
+        if tool is None:
+            continue
+        n += 1
+        _, descripcion = CATEGORIAS[categoria]
+        lineas.append(f"   PRIORITY {n}: '{tool.name}' — {descripcion}")
+
+    lineas.append(
+        f"   PRIORITY {n + 1} (open web — LAST RESORT ONLY): 'busqueda_web_ies_jandula' "
+        f"(web del centro) or 'busqueda_web_general'. Use ONLY when every source above returned nothing useful."
+    )
+    return "\n".join(lineas)
+
+
+def behavior_teacher(incluir_internas: bool = True) -> str:
+    """BEHAVIOR_TEACHER con la prioridad de fuentes ya resuelta."""
+    return BEHAVIOR_TEACHER.replace(
+        "{PRIORIDAD_FUENTES}", bloque_prioridad_fuentes(incluir_internas)
+    )
+
+
+def behavior_public() -> str:
+    """BEHAVIOR_PUBLIC con la prioridad de fuentes ya resuelta.
+
+    Sin internas: la guía del profesorado es normativa interna y no se ofrece en
+    la rama pública, igual que en `obtener_tools_publicas()`.
+    """
+    return BEHAVIOR_PUBLIC.replace(
+        "{PRIORIDAD_FUENTES}", bloque_prioridad_fuentes(incluir_internas=False)
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

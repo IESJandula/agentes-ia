@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Comprobando sesión…</title></head>
+<body>
+<!--
+  Iframe oculto de Keycloak. No es una página que vea nadie: Keycloak la carga
+  dentro de un iframe para comprobar en segundo plano si ya hay sesión iniciada,
+  y esta línea le devuelve el resultado a la ventana principal.
+  Copia literal de la que usan accesos-web y guardias-web.
+-->
+<script>parent.postMessage(location.href, location.origin);</script>
+</body>
+</html>

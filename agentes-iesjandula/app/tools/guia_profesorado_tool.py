@@ -1,5 +1,6 @@
 from langchain_core.tools import tool
 from data.data import obtener_coleccion, query_coleccion
+from ._kb import filtro_activos
 
 
 @tool
@@ -33,6 +34,7 @@ def guia_profesorado(search: str) -> str:
         query=search,
         n_results=8,
         include=["documents", "metadatas", "distances"],
+        where=filtro_activos("profesores"),
     )
 
     docs       = resultados["documents"][0]

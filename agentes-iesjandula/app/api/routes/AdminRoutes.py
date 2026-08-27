@@ -1,7 +1,14 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from app.api.controllers.AdminController import AdminController
+from app.auth import requiere_admin
 
-router = APIRouter(prefix="/admin", tags=["Admin"])
+#: Estadísticas de uso y estado del seed: quién le pregunta qué al agente es un
+#: dato del claustro, no un panel público.
+router = APIRouter(
+    prefix="/admin",
+    tags=["Admin"],
+    dependencies=[Depends(requiere_admin)],
+)
 
 
 @router.get("/stats")
