@@ -129,3 +129,31 @@ static/
 index.html       Chat
 admin.html       Panel de administración
 ```
+
+---
+
+## De dónde viene este repositorio
+
+Es el continuador privado de [`IESJandula/agentes-ia`](https://github.com/IESJandula/agentes-ia),
+el proyecto original. Se separó al añadir el login y el panel de administración:
+a partir de aquí el repositorio guarda material del centro y estadísticas de uso
+con el correo de quien pregunta, y eso no puede vivir en un repositorio público.
+
+El original sigue ahí como `upstream`, y el intercambio va en los dos sentidos:
+
+```bash
+git fetch upstream && git merge upstream/main   # traer mejoras del original
+```
+
+Por eso el código sigue colgando de `agentes-iesjandula/` en vez de estar en la
+raíz: mismas rutas que el original, así los cambios cruzan sin conflictos de
+fichero. Lo genérico —arreglos del agente, prompts, indexado— se le devuelve al
+original por PR. Lo del centro —documentos, estadísticas, el cliente de Keycloak
+del realm de vegaies— se queda aquí.
+
+### Qué no entra en git
+
+Ni los PDFs del centro ni `data/chroma_db*/`. La sqlite de Chroma no guarda solo
+vectores: lleva dentro el texto de los fragmentos, así que versionarla publica el
+documento otra vez. Todo eso vive en el volumen del despliegue y se gestiona
+desde el panel.
