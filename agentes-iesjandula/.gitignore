@@ -41,7 +41,7 @@ agente_env/
 app/data/chroma_db/
 chroma_db/
 data/chroma_db/
-data/chroma_db_v3/
+data/chroma_db*/
 *.local.storage
 
 # --- Playwright y Navegadores ---
@@ -74,3 +74,13 @@ data/legislacion/*.PDF
 data/usage_stats.json
 data/kb_config.json
 data/checkpoints.db
+
+# --- Documentos del centro (RGPD) ---
+# Ni los PDFs del centro ni la base vectorial que los contiene indexados van en
+# git: viven en el volumen del despliegue y se gestionan desde el panel de
+# administración. En un repo acaban publicados y no hay forma de despublicarlos.
+data/*.pdf
+data/*.PDF
+data/centro/*
+!data/centro/README.md
+!data/centro/.gitkeep
